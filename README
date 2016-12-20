@@ -15,4 +15,4 @@ The system report on the system must contain 'pat_id' as a column in the report.
 Additionally, a column of 'filename' will determine what to name the downloaded pdf files.
 
 To compile this script for a Windows executable, run the following on a Windows system:
-    pyinstaller --onefile main.py
+    pyinstaller --onefile --windowed --name wcexport main.py
