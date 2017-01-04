@@ -27,25 +27,25 @@ class MainWin(object):
         wcinputs = tk.Frame(win)
         wcinputs.pack()
         tk.Label(wcinputs, text='WebChart URL').grid(row=0)
-        tk.Label(wcinputs, text='System Report').grid(row=1)
-        tk.Label(wcinputs, text='Print Definition').grid(row=2)
+        tk.Label(wcinputs, text='WebChart Username').grid(row=1)
+        tk.Label(wcinputs, text='WebChart Password').grid(row=2)
+        tk.Label(wcinputs, text='System Report').grid(row=3)
+        tk.Label(wcinputs, text='Print Definition').grid(row=4)
 
         self.url = tk.Entry(wcinputs)
         self.url.grid(row=0, column=1)
+
+        self.username = tk.Entry(wcinputs)
+        self.username.grid(row=1, column=1)
+        self.password = tk.Entry(wcinputs, show='*')
+        self.password.grid(row=2, column=1)
+
         self.report = tk.Entry(wcinputs)
-        self.report.grid(row=1, column=1)
+        self.report.insert(0, 'WebChart Export')
+        self.report.grid(row=3, column=1)
         self.printdef = tk.Entry(wcinputs)
-        self.printdef.grid(row=2, column=1)
-
-        creds = tk.Frame(win)
-        creds.pack()
-        tk.Label(creds, text='WebChart Username').grid(row=0)
-        tk.Label(creds, text='WebChart Password').grid(row=1)
-        self.username = tk.Entry(creds)
-        self.username.grid(row=0, column=1)
-        self.password = tk.Entry(creds, show='*')
-        self.password.grid(row=1, column=1)
-
+        self.printdef.insert(0, 'WebChart Export')
+        self.printdef.grid(row=4, column=1)
         self.progressFrame = tk.Frame(win)
         self.progressFrame.pack()
 
@@ -212,7 +212,7 @@ class MainWin(object):
             if m:
                 url = m.group(1)
             elif 'You Currently Do Not Have Access to:' in out:
-                tkm.showwarning('Access denied to chart: {0}'.format(chart_id))
+                tkm.showwarning(message='Access denied to chart: {0}'.format(chart_id))
             else:
                 raise Exception('Failed to find job_url input in the response for chart {0}'.format(chart_id))
             return url
