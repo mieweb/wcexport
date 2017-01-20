@@ -223,7 +223,7 @@ class MainWin(object):
                 if out.strip() == 'Print Spool is currently empty.':
                     out = 'Chart print contained no data to be printed'
                     filename = '{0}.txt'.format(os.path.splitext(filename)[0])
-                with open(filename, 'w') as fp:
+                with open(filename, 'wb') as fp:
                     fp.write(out)
 
         def getChart(chart_id, filename):
