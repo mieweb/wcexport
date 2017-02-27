@@ -8,6 +8,7 @@ import ssl
 import re
 import os
 import csv
+import time
 from StringIO import StringIO
 
 title = 'WebChart Export Utility'
@@ -18,11 +19,18 @@ def getSSLContext():
     ctx.verify_mode = ssl.CERT_NONE
     return ctx
 
+def getOutDir(cls, path):
+    if os.path.isabs(path):
+        return os.path.expanduser(path)
+    else:
+        return os.path.join(os.path.expanduser('~'), path)
+
 class MainWin(object):
     def __init__(self, win):
-        self.outdir = os.path.join(os.path.expanduser('~'), 'wcexport')
         self.win = win
         win.title(title)
+
+        self.logfp = None
 
         wcinputs = tk.Frame(win)
         wcinputs.pack()
@@ -31,6 +39,7 @@ class MainWin(object):
         tk.Label(wcinputs, text='WebChart Password').grid(row=2)
         tk.Label(wcinputs, text='System Report').grid(row=3)
         tk.Label(wcinputs, text='Print Definition').grid(row=4)
+        tk.Label(wcinputs, text='Output Directory').grid(row=5)
 
         self.url = tk.Entry(wcinputs)
         self.url.grid(row=0, column=1)
@@ -46,6 +55,10 @@ class MainWin(object):
         self.printdef = tk.Entry(wcinputs)
         self.printdef.insert(0, 'WebChart Export')
         self.printdef.grid(row=4, column=1)
+        self.outstring = tk.StringVar()
+        self.outstring.set('wcexport')
+        self.outdirE = tk.Entry(wcinputs, textvariable=self.outstring)
+        self.outdirE.grid(row=5, column=1)
         self.progressFrame = tk.Frame(win)
         self.progressFrame.pack()
 
@@ -54,14 +67,19 @@ class MainWin(object):
         tk.Button(buttons, text='Begin Export', fg='Green', command=self.export).grid(row=0, column=0)
         tk.Button(buttons, text='Exit', command=win.quit).grid(row=0, column=1)
 
-        notes = tk.Frame(win)
-        notes.pack()
-        tk.Label(notes, text='* System report must be a valid system report in the given webchart system.\n'\
-                 '\tIt must contain at least the column \'pat_id\' to indicate which charts are to be '\
-                 'exported.\n\tIt may also contain a column for \'filename\' to specify what the resulting '\
-                 'pdf file should be named\n'\
-                 '* All downloads will be placed in: [ {0} ]'.format(self.outdir), justify=tk.LEFT).grid(row=0)
-
+        self.notes = tk.Frame(win)
+        self.notes.pack()
+        def genNotes(*args):
+            self.outdir = getOutDir(self, self.outstring.get())
+            self.notesText = tk.Label(self.notes,
+                     text='* System report must be a valid system report in the given webchart system.\n'\
+                     '\tIt must contain at least the column \'pat_id\' to indicate which charts are to be '\
+                     'exported.\n\tIt may also contain a column for \'filename\' to specify what the resulting '\
+                     'pdf file should be named\n'\
+                     '* All downloads will be placed in: [ {0} ]'.format(self.outdir,
+                     justify=tk.LEFT)).grid(row=0)
+        genNotes(None)
+        self.outstring.trace('w', genNotes)
 
     def getURLResponse(self, url, data={}):
         if data and hasattr(self, 'session_id'):
@@ -70,13 +88,15 @@ class MainWin(object):
             res = urllib2.urlopen(url, context=getSSLContext(),
                     data=urllib.urlencode(data) if data else None)
         except Exception as e:
-            raise Exception('{0} Exception [ {1} ] in urlopen [ {2} ] {3}'.format(
-                type(e), url, data, e))
+            raise Warning('Internal error in urlopen [ {0} : {1} ] at [ {2} : {3} ]'.format(
+                type(e), str(e), url, data))
         if res.getcode() not in [200]:
-            raise Exception('Invalid http code [ {0} ]'.format(res.headers.getcode()))
+            raise Warning('Invalid http response code [ {0} ]'.format(res.headers.getcode()))
         if res.headers.get('X-lg_status').lower() != 'success':
+            self.log('Login failed for {0}: {1}'.format(url, data))
             raise Exception('Login failed [ {0} ]'.format(res.headers.get('X-status_desc')))
-        return res.read(), res
+        out = res.read()
+        return out, res
 
     def validateInputs(self):
         d = {
@@ -121,6 +141,7 @@ class MainWin(object):
             c = cookie[1].split(';')[0]
         except:
             tkm.showerror(message='WebChart cookie could not be parsed: {0}'.format(cookie))
+            return False
         else:
             self.session_id = c
         return True
@@ -178,6 +199,10 @@ class MainWin(object):
             })
         return True 
 
+    def log(self, msg):
+        if self.logfp is not None:
+            self.logfp.write('{0} {1}\n'.format(time.ctime(), msg))
+
     def export(self):
         if not self.validate():
             return False
@@ -185,6 +210,10 @@ class MainWin(object):
             return False
         if not os.path.exists(self.outdir):
             os.makedirs(self.outdir)
+        if not self.logfp:
+            self.logfp = open(os.path.join(self.outdir, 'wcexport.log'), 'a')
+            self.log('Beginning Export of {0} with report [ {1} ] and print definition [ {2} ]'.format(
+                self.url.get(), self.report.get(), self.printdef.get()))
         data = {
             'f': 'chart',
             's': 'print',
@@ -212,9 +241,17 @@ class MainWin(object):
             if m:
                 url = m.group(1)
             elif 'You Currently Do Not Have Access to:' in out:
-                tkm.showwarning(message='Access denied to chart: {0}'.format(chart_id))
+                self.log('Access denied to chart: {0}'.format(chart_id))
             else:
-                raise Exception('Failed to find job_url input in the response for chart {0}'.format(chart_id))
+                m = re.search('pjob_id=([\d]+)', out)
+                if m:
+                    self.log('Print for chart {0} failed due to document errors, '\
+                             'but what printed successfully was saved'.format(chart_id))
+                    pjob_id = m.group(1)
+                    url = '{0}?f=admin&s=printman&v=view_pjob&job_id={1}&session_id={2}'.format(
+                        self.url.get(), pjob_id, self.session_id)
+                else:
+                    self.log('Failed to find job_url input or a pjob_id in the response for chart {0}'.format(chart_id))
             return url
 
         def downloadPrintJob(url, chart_id, filename):
@@ -230,15 +267,30 @@ class MainWin(object):
             if not os.path.exists(filename):
                 downloadPrintJob(printChart(chart_id), chart_id, filename)
             return filename
-        
+
+        msg = 'Export Complete'
         for idx, chart in enumerate(self.charts):
             self.progressCurrent['text'] = 'Exporting chart [ {0} ]'.format(chart['pat_id'])
             self.win.update()
-            getChart(chart['pat_id'], chart['filename'])
+            try:
+                getChart(chart['pat_id'], chart['filename'])
+            except Warning as w:
+                self.log(w)
+                if not tkm.askyesno(title='Warning',
+                        message='{0}\n\nDo you want to continue the export?'.format(w)):
+                    msg = 'Export Aborted Due To User Request'
+                    break
+            except Exception as e:
+                self.log(e)
+                tkm.showerror(title='Fatal Error', message=e)
+                msg = 'Export Aborted Due to Error'
+                break
             self.progress.step()
             self.progressLabel['text'] = '{0} / {1}'.format(idx + 1, len(self.charts))
             self.win.update()
-        tkm.showinfo(message='Export Complete')
+        tkm.showinfo(message=msg)
+        self.log(msg)
+        self.logfp.close()
 
 def main():
     win = tk.Tk()
