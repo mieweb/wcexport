@@ -9,6 +9,7 @@ import re
 import os
 import csv
 import time
+import string
 from StringIO import StringIO
 
 title = 'WebChart Export Utility'
@@ -191,11 +192,14 @@ class MainWin(object):
                 .format(self.report.get()))
             return False
         self.charts = []
+        validChars = '_-,.()[] {0}{1}'.format(string.ascii_letters, string.digits)
         for row in reader:
+            filename = row['pat_id']
+            if 'filename' in row:
+                filename = ''.join([x if x in validChars else '_' for x in row['filename']])
             self.charts.append({
                 'pat_id': row['pat_id'],
-                'filename': os.path.join(self.outdir,
-                                '{0}.pdf'.format(row['filename'] if 'filename' in row else row['pat_id']))
+                'filename': '{0}.pdf'.format(os.path.join(self.outdir, filename))
             })
         return True 
 
@@ -291,6 +295,7 @@ class MainWin(object):
         tkm.showinfo(message=msg)
         self.log(msg)
         self.logfp.close()
+        self.logfp = None
 
 def main():
     win = tk.Tk()
