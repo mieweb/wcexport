@@ -4,6 +4,7 @@ import ttk
 import tkMessageBox as tkm
 import urllib
 import urllib2
+import urlparse
 import ssl
 import re
 import os
@@ -77,6 +78,8 @@ class MainWin(object):
                      '\tIt must contain at least the column \'pat_id\' to indicate which charts are to be '\
                      'exported.\n\tIt may also contain a column for \'filename\' to specify what the resulting '\
                      'pdf file should be named\n'\
+					 '\tAny additional columns with values starting with \'?\' will be '\
+					 'treated as a relative url to download a separate file (CCD, CCR, etc..)\n'
                      '* All downloads will be placed in: [ {0} ]'.format(self.outdir,
                      justify=tk.LEFT)).grid(row=0)
         genNotes(None)
@@ -87,7 +90,7 @@ class MainWin(object):
             data['session_id'] = self.session_id
         try:
             res = urllib2.urlopen(url, context=getSSLContext(),
-                    data=urllib.urlencode(data) if data else None)
+                    data=urllib.urlencode(data, doseq=True) if data else None)
         except Exception as e:
             raise Warning('Internal error in urlopen [ {0} : {1} ] at [ {2} : {3} ]'.format(
                 type(e), str(e), url, data))
@@ -191,6 +194,7 @@ class MainWin(object):
             tkm.showerror(message='System report [ {0} ] does not contain the required "pat_id" column'
                 .format(self.report.get()))
             return False
+        extrafields = [x for x in reader.fieldnames if x not in ['pat_id', 'filename']]
         self.charts = []
         validChars = '_-,.()[] {0}{1}'.format(string.ascii_letters, string.digits)
         for row in reader:
@@ -199,7 +203,8 @@ class MainWin(object):
                 filename = ''.join([x if x in validChars else '_' for x in row['filename']])
             self.charts.append({
                 'pat_id': row['pat_id'],
-                'filename': '{0}.pdf'.format(os.path.join(self.outdir, filename))
+                'filename': '{0}.pdf'.format(os.path.join(self.outdir, filename)),
+                'urls': dict(zip(extrafields, [row[x] for x in extrafields]))
             })
         return True 
 
@@ -272,12 +277,25 @@ class MainWin(object):
                 downloadPrintJob(printChart(chart_id), chart_id, filename)
             return filename
 
+        def getExternalUrls(baseName, urls):
+            for filename, url in urls.iteritems():
+                if url.startswith('?'):
+                    out, _ = self.getURLResponse(self.url.get(), urlparse.parse_qs(url[1:]))
+                    fname = '{0}_{1}'.format(os.path.splitext(baseName)[0], filename)
+                    if not os.path.exists(fname):
+                        with open(fname, 'w') as fp:
+                            fp.write(out)
+                    else:
+                        self.log('Skipping already present external url file {0}'.format(fname))
+
         msg = 'Export Complete'
         for idx, chart in enumerate(self.charts):
             self.progressCurrent['text'] = 'Exporting chart [ {0} ]'.format(chart['pat_id'])
             self.win.update()
             try:
                 getChart(chart['pat_id'], chart['filename'])
+                self.log(str(chart['urls']))
+                getExternalUrls(chart['filename'], chart['urls'])
             except Warning as w:
                 self.log(w)
                 if not tkm.askyesno(title='Warning',
