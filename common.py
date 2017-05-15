@@ -11,8 +11,9 @@ import csv
 import time
 import string
 from StringIO import StringIO
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
+import math
 
 validChars = '_-,.()[] {0}{1}'.format(string.ascii_letters, string.digits)
 def sanitizeFilename(filename):
@@ -34,11 +35,12 @@ class MainWin(object):
     def __init__(self, win, fullExport=True):
         self.win = win
         self.fullExport = fullExport
+        self.scheduleID = None
         lastrow = 5
         if fullExport:
             win.title('WebChart Export Utility')
         else:
-            lastrow = 8
+            lastrow = 10
             win.title('WebChart Document Export Utility')
 
         self.logfp = None
@@ -57,7 +59,9 @@ class MainWin(object):
             tk.Label(wcinputs, text='End Date').grid(row=4)
             tk.Label(wcinputs, text='Extra CGI').grid(row=5)
             tk.Label(wcinputs, text='Document Types').grid(row=6)
-            tk.Label(wcinputs, text='Scheduling').grid(row=7)
+            tk.Label(wcinputs, text='Single Export').grid(row=7)
+            tk.Label(wcinputs, text='Schedule At').grid(row=8)
+            tk.Label(wcinputs, text='Schedule Every').grid(row=9)
 
         tk.Label(wcinputs, text='Output Directory').grid(row=lastrow)
 
@@ -78,22 +82,22 @@ class MainWin(object):
             self.printdef.grid(row=4, column=1)
         else:
             now = datetime.now()
-            self.bd_d = tk.Entry(wcinputs)
+            self.bd_d = tk.Entry(wcinputs, width=2)
             self.bd_d.insert(0, now.day)
             self.bd_d.grid(row=3, column=1)
-            self.bd_m = tk.Entry(wcinputs)
+            self.bd_m = tk.Entry(wcinputs, width=2)
             self.bd_m.insert(0, now.month)
             self.bd_m.grid(row=3, column=2)
-            self.bd_y = tk.Entry(wcinputs)
+            self.bd_y = tk.Entry(wcinputs, width=4)
             self.bd_y.insert(0, now.year)
             self.bd_y.grid(row=3, column=3)
-            self.ed_d = tk.Entry(wcinputs)
+            self.ed_d = tk.Entry(wcinputs, width=2)
             self.ed_d.insert(0, now.day)
             self.ed_d.grid(row=4, column=1)
-            self.ed_m = tk.Entry(wcinputs)
+            self.ed_m = tk.Entry(wcinputs, width=2)
             self.ed_m.insert(0, now.month)
             self.ed_m.grid(row=4, column=2)
-            self.ed_y = tk.Entry(wcinputs)
+            self.ed_y = tk.Entry(wcinputs, width=4)
             self.ed_y.insert(0, now.year)
             self.ed_y.grid(row=4, column=3)
 
@@ -108,10 +112,21 @@ class MainWin(object):
             ccr.grid(row=6, column=2)
 
             self.schedule = tk.IntVar()
-            schedule = tk.Checkbutton(wcinputs, text='Recur every [x] hours', variable=self.schedule)
-            self.recur = tk.Spinbox(wcinputs, from_=1, to=48)
-            schedule.grid(row=7, column=1)
-            self.recur.grid(row=7, column=2)
+            tk.Radiobutton(wcinputs, text='No Schedule', variable=self.schedule,
+                value=0).grid(row=7, column=1)
+            tk.Radiobutton(wcinputs, text='Date', variable=self.schedule, value=1).grid(
+                row=8, column=1)
+            self.scheduleOnm = tk.Entry(wcinputs, width=2)
+            self.scheduleOnd = tk.Entry(wcinputs, width=2)
+            self.scheduleOny = tk.Entry(wcinputs, width=4)
+            self.scheduleOnm.grid(row=8, column=2)
+            self.scheduleOnd.grid(row=8, column=3)
+            self.scheduleOny.grid(row=8, column=4)
+            tk.Radiobutton(wcinputs, text='Every Nth day of the month',
+                variable=self.schedule, value=2).grid(row=9, column=1)
+            self.scheduleEveryd = tk.Entry(wcinputs, width=2)
+            self.scheduleEveryd.grid(row=9, column=2)
+
 
         self.outstring = tk.StringVar()
         self.outstring.set('wcexport')
@@ -290,13 +305,51 @@ class MainWin(object):
         if self.fullExport or not self.schedule.get():
             self.export()
         else:
+            if not self.validate():
+                return False
+            now = datetime.now()
+            if not tkm.askyesno(title='Schedule Export?', message='Confirm scheduled export?'):
+                return
+            if self.schedule.get() == 1:
+                m = self.scheduleOnm.get()
+                d = self.scheduleOnd.get()
+                y = self.scheduleOny.get()
+                try:
+                    date = datetime(int(y), int(m), int(d))
+                    if date < now:
+                        raise Exception('no')
+                except Exception as e:
+                    tkm.showwarning(message='Please enter a valid future date in for the MM/DD/YYYY format')
+                    return
+            elif self.schedule.get() == 2:
+                try:
+                    d = int(self.scheduleEveryd.get())
+                    if d < 0 or d > 28:
+                        raise Exception('lol no')
+                except Exception as e:
+                    tkm.showwarning(message='Please enter a valid day of the month (1-28)')
+                    return
+                if now.day < d:
+                    date = now + timedelta(days=d - now.day)
+                else:
+                    if now.month == 12:
+                        y = now.year + 1
+                        m = 1
+                    else:
+                        y = now.year
+                        m = now.month + 1
+                    date = datetime(y, m, d)
             self.exportButton.configure(command=self.cancelSchedule)
-            print('Doing it')
             self.exportText.set('Cancel Schedule')
-            self.export()
             self.win.wm_state('iconic')
-            self.scheduleID = self.win.after(int(self.recur.get()) * 60 * 60 * 1000,  self.exportWrapper)
-             
+            interval = int(math.ceil((date - now).total_seconds())) * 1000
+            if self.schedule.get() == 1:
+                self.scheduleID = self.win.after(interval, self.export)
+            else:
+                if self.scheduleID:
+                    self.export()
+                self.scheduleID = self.win.after(interval, self.exportWrapper)
+
     def export(self):
         if not self.validate():
             return False
