@@ -14,6 +14,7 @@ from StringIO import StringIO
 from datetime import datetime, timedelta
 import time
 import math
+from xml.dom import minidom
 
 validChars = '_-,.()[] {0}{1}'.format(string.ascii_letters, string.digits)
 def sanitizeFilename(filename):
@@ -235,6 +236,30 @@ class MainWin(object):
             return False
         else:
             self.session_id = c
+        out, res = self.getURLResponse(self.url.get(), {
+            'f': 'ajaxget',
+            's': 'permission',
+            'module': 'WebChart',
+            'category_name': 'Appliance Synchronization'
+        })
+        try:
+            dom = minidom.parse(StringIO(out))
+        except Exception as e:
+            tkm.showerror(message='WebChart permission check did not return a valid XML response')
+            return False
+        permissions = dom.getElementsByTagName('permission')
+        if not permissions:
+            tkm.showerror(message='WebChart permission check did not any permission nodes')
+            return False
+        try:
+            print permissions[0]
+            if int(permissions[0].attributes['value'].value) == 0:
+                tkm.showerror(message='You do not have permission to perform this export')
+                print permissions[0].attributes['value'].value
+                return False
+        except Exception as e:
+            tkm.showerror(message='Your permission to perform this export could not be determined')
+            return False
         return True
 
     def validatePrintDef(self):
