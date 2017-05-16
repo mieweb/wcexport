@@ -489,7 +489,6 @@ class MainWin(object):
                         self.log('Skipping already present external url file {0}'.format(fname))
 
         def downloadDocument(doc_id, filename):
-            print 'downloading document', data
             if not os.path.exists(filename):
                 out, _ = self.getURLResponse(self.url.get(), {
                     'f': 'stream',
