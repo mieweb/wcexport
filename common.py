@@ -120,9 +120,13 @@ class MainWin(object):
             self.scheduleOnm = tk.Entry(wcinputs, width=2)
             self.scheduleOnd = tk.Entry(wcinputs, width=2)
             self.scheduleOny = tk.Entry(wcinputs, width=4)
+            self.scheduleOnh = tk.Entry(wcinputs, width=2)
+            self.scheduleOnmm = tk.Entry(wcinputs, width=2)
             self.scheduleOnm.grid(row=8, column=2)
             self.scheduleOnd.grid(row=8, column=3)
             self.scheduleOny.grid(row=8, column=4)
+            self.scheduleOnh.grid(row=8, column=5)
+            self.scheduleOnmm.grid(row=8, column=6)
             tk.Radiobutton(wcinputs, text='Every Nth day of the month',
                 variable=self.schedule, value=2).grid(row=9, column=1)
             self.scheduleEveryd = tk.Entry(wcinputs, width=2)
@@ -337,11 +341,16 @@ class MainWin(object):
                 m = self.scheduleOnm.get()
                 d = self.scheduleOnd.get()
                 y = self.scheduleOny.get()
+                h = self.scheduleOnh.get() or 0
+                mm = self.scheduleOnmm.get() or 0
                 try:
-                    date = datetime(int(y), int(m), int(d))
-                    if date < now:
+                    date = datetime(int(y), int(m), int(d), int(h), int(mm))
+                    mm = int(mm)
+                    h = int(d)
+                    if date < now or mm < 0 or mm > 60 or h < 0 or h > 24:
                         raise Exception('no')
                 except Exception as e:
+                    print e
                     tkm.showwarning(message='Please enter a valid future date in for the MM/DD/YYYY format')
                     return
             elif self.schedule.get() == 2:
