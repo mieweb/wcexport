@@ -252,10 +252,8 @@ class MainWin(object):
             tkm.showerror(message='WebChart permission check did not any permission nodes')
             return False
         try:
-            print permissions[0]
             if int(permissions[0].attributes['value'].value) == 0:
                 tkm.showerror(message='You do not have permission to perform this export')
-                print permissions[0].attributes['value'].value
                 return False
         except Exception as e:
             tkm.showerror(message='Your permission to perform this export could not be determined')
