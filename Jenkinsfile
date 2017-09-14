@@ -14,7 +14,7 @@ pipeline {
 			steps {
 				bat 'copy dist\\wcexport.exe .'
 				bat 'copy dist\\docexport.exe .'
-				bat 'git commit *.exe -m "Updated Windows Executables" && git push origin HEAD:master'
+				bat 'git commit *.exe -m "Updated Windows Executables" || exit 0 && git push origin HEAD:master'
 			}
 		}
 	}
