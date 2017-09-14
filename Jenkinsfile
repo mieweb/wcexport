@@ -10,8 +10,8 @@ pipeline {
 			bat 
 		}
 		stage('Commit Binaries') {
-			bat 'copy dist\wcexport.exe .'
-			bat 'copy dist\docexport.exe .'
+			bat 'copy dist\\wcexport.exe .'
+			bat 'copy dist\\docexport.exe .'
 			bat 'git commit *.exe -m "Updated Windows Executables"'
 			bat 'git push origin HEAD:master'
 		}
