@@ -1,4 +1,5 @@
 #!groovy
+
 pipeline {
 	agent {
 		label 'windows'
