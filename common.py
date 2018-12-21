@@ -253,11 +253,11 @@ class MainWin(object):
             return False
         permissions = dom.getElementsByTagName('permission')
         if not permissions:
-            tkm.showerror(message='WebChart permission check did not any permission nodes')
+            tkm.showerror(message='WebChart permission check did not return any permission nodes')
             return False
         try:
             if int(permissions[0].attributes['value'].value) == 0:
-                tkm.showerror(message='You do not have permission to perform this export')
+                tkm.showerror(message='You do not have the required "Appliance Synchronization" permission to perform this export')
                 return False
         except Exception as e:
             tkm.showerror(message='Your permission to perform this export could not be determined')
