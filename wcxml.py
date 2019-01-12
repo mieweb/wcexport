@@ -7,12 +7,20 @@ import base64
 import json
 import re
 
-USERNAME = 'dave'
-PASSWORD = 'dave'
-COOKIE = None
+URL = 'https://zeus-web.med-web.com/webchart/wctdcarlson_xdr/webchart.cgi'
+USERNAME = 'selenium'
+PASSWORD = 'Selenium1!'
+OUTPUT_FOLDER = 'output'
+
+SDATE = ''
+EDATE = ''
+NAMES = [ 'Newman' ]
+
+
+# this will get set as part of the API
+SESSION_COOKIE = None
 
 DTREG = '\d{4}-\d{2}-\d{2}'
-OUTPUT = 'output'
 APIS = {
 	'Patient Name': 'Patient Name',
 	'Sex': 'Gender Code',
@@ -28,66 +36,63 @@ APIS = {
 	'Vital Signs': 'Vital Signs',
 	'Procedures': 'Procedures',
 	'Immunizations': 'Immunizations',
+	'Care Team Members': 'Care Team Members',
+	'Medical_Equipment': 'Medical_Equipment',
+	'Goals': 'Goals',								# Encounter
+	'Health Concerns': 'Health Concerns',			# Encounter
+	'Assessments': 'Assessments',					# Encounter
+	'Health Concerns': 'Health Concerns',			# Encounter
+	'Plan': 'Plan'									# Encounter
 }
 
-def usage():
-	print('Usage: {0} URL [startDate [endDate]] PatientLastName1 PatientLastName2 ...'.format(__file__))
-	exit()
 
 if __name__ == '__main__':
-	if len(sys.argv) < 3:
-		usage()
-	URL = sys.argv[1]
-	sdate = ''
-	edate = ''
-	names = sys.argv[2:]
-	dtmatches = [x for x in names if re.match(DTREG, x)]
-	if dtmatches:
-		if len(dtmatches) == 1:
-			sdate = dtmatches[0]
-		else:
-			sdate = dtmatches[0]
-			edate = dtmatches[1]
-	charts = {}
+	dtmatches = [x for x in NAMES if re.match(DTREG, x)]
+
 	print('Initializing session at {0}'.format(URL))
 	try:
 		out = urllib2.urlopen(URL, urllib.urlencode({
 			'login_user': USERNAME,
 			'login_passwd': PASSWORD
 		}))
-		COOKIE = out.headers.get('Set-Cookie').split('=')[1].split(';')[0]
+		SESSION_COOKIE = out.headers.get('Set-Cookie').split('=')[1].split(';')[0]
 	except Exception as e:
 		print('Session failed to initialize {0}'.format(e))
 
-	if COOKIE:
-		for name in names:
+	if SESSION_COOKIE:
+		print('Getting Chart identifiers')
+		charts = {}
+		for name in NAMES:
 			js = json.load(urllib2.urlopen(URL, urllib.urlencode({
 				'f': 'json',
-				'session_id': COOKIE,
+				'session_id': SESSION_COOKIE,
 				'apistring': base64.b64encode('GET/db/patients/LIKE_last_name={0}'.format(name))
 			})))
 			if js and js['db']:
 				for rec in js['db']:
 					charts[rec['pat_id']] = rec
+
+
 		for cid, chart in charts.iteritems():
 			patname = '{0},{1},{2}_{3}'.format(chart['last_name'], chart['first_name'],
 				chart['middle_name'], cid)
-			if not os.path.exists(os.path.join(OUTPUT, patname)):
-				os.makedirs(os.path.join(OUTPUT, patname))
+			if not os.path.exists(os.path.join(OUTPUT_FOLDER, patname)):
+				os.makedirs(os.path.join(OUTPUT_FOLDER, patname))
 			print('Retrieving data for {0} {1} {2}'.format(patname,
-				'after' if not edate and sdate else 'between' if edate and sdate else '',
-				sdate if not edate else '{0} and {1}'.format(sdate, edate)))
+				'after' if not EDATE and SDATE else 'between' if EDATE and SDATE else '',
+				SDATE if not EDATE else '{0} and {1}'.format(SDATE, EDATE)))
 			for k, v in APIS.iteritems():
 				res = urllib2.urlopen(URL, urllib.urlencode({
-					'session_id': COOKIE,
+					'session_id': SESSION_COOKIE,
 					'f': 'layout',
 					'module': 'StructDocAPI',
 					'XML': '1',
 					'name': v,
 					'pat_id': cid,
-					'sdate': sdate,
-					'edate': edate,
+#					'encounter_id': 76,  # encounter is needed for some of the calls 
+					'SDATE': SDATE,
+					'EDATE': EDATE,
 				}))
-				with open (os.path.join(OUTPUT, patname, '{0}.xml'.format(k)), 'w') as fp:
+				with open (os.path.join(OUTPUT_FOLDER, patname, '{0}.xml'.format(k)), 'w') as fp:
 					fp.write(res.read())
 			
