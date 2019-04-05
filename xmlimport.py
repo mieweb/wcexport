@@ -119,8 +119,8 @@ if __name__ == '__main__':
             'storage_type': STORAGE_TYPE,
             'doc_type': DOC_TYPE,
             'file': open(os.path.join(path, f), 'rb').read(),
-            'pat_id': 18,
-#            'mrnumber': mrnumber,
+#            'pat_id': 18,
+            'mrnumber': mrnumber,
         })
         try:
             dom = minidom.parse(StringIO(out))
