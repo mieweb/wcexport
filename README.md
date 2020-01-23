@@ -18,9 +18,9 @@ The system report should contain two columns:
 
 Running
 --------------
-To run the [executable](https://repo.mieweb.com/projects/WC/repos/wcexport/browse/docexport.exe) on Windows, simply run the `wcexport.exe` file.
+To run the [executable](docexport.exe) on Windows, simply run the `wcexport.exe` file.
 
-You may also run the [python script](https://repo.mieweb.com/projects/WC/repos/wcexport/browse/wcexport.py) directly if you cannot run a Windows executable. `./wcexport.py`
+You may also run the [python script](wcexport.py) directly if you cannot run a Windows executable. `./wcexport.py`
 
 
 Enter the required information into the application's fields and click 'Begin Export'.
