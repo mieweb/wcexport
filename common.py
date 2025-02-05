@@ -1,16 +1,17 @@
-import Tkinter as tk
-import ttk
-import tkMessageBox as tkm
+import tk
+from tkinter import ttk
+import tkinter
+import tkinter.messagebox as tkm
 import urllib
-import urllib2
-import urlparse
+from urllib.request import urlopen
+from urllib.parse import urlparse
 import ssl
 import re
 import os
 import csv
 import time
 import string
-from StringIO import StringIO
+from io import StringIO
 from datetime import datetime, timedelta
 import time
 import math
@@ -46,110 +47,110 @@ class MainWin(object):
 
         self.logfp = None
 
-        wcinputs = tk.Frame(win)
+        wcinputs = tkinter.Frame(win)
         wcinputs.pack()
-        tk.Label(wcinputs, text='WebChart URL').grid(row=0)
-        tk.Label(wcinputs, text='WebChart Username').grid(row=1)
-        tk.Label(wcinputs, text='WebChart Password').grid(row=2)
+        tkinter.Label(wcinputs, text='WebChart URL').grid(row=0)
+        tkinter.Label(wcinputs, text='WebChart Username').grid(row=1)
+        tkinter.Label(wcinputs, text='WebChart Password').grid(row=2)
 
         if fullExport:
-            tk.Label(wcinputs, text='System Report').grid(row=3)
-            tk.Label(wcinputs, text='Print Definition').grid(row=4)
+            tkinter.Label(wcinputs, text='System Report').grid(row=3)
+            tkinter.Label(wcinputs, text='Print Definition').grid(row=4)
         else:
-            tk.Label(wcinputs, text='Begin Date').grid(row=3)
-            tk.Label(wcinputs, text='End Date').grid(row=4)
-            tk.Label(wcinputs, text='Extra CGI').grid(row=5)
-            tk.Label(wcinputs, text='Document Types').grid(row=6)
-            tk.Label(wcinputs, text='Single Export').grid(row=7)
-            tk.Label(wcinputs, text='Schedule At').grid(row=8)
-            tk.Label(wcinputs, text='Schedule Every').grid(row=9)
+            tkinter.Label(wcinputs, text='Begin Date').grid(row=3)
+            tkinter.Label(wcinputs, text='End Date').grid(row=4)
+            tkinter.Label(wcinputs, text='Extra CGI').grid(row=5)
+            tkinter.Label(wcinputs, text='Document Types').grid(row=6)
+            tkinter.Label(wcinputs, text='Single Export').grid(row=7)
+            tkinter.Label(wcinputs, text='Schedule At').grid(row=8)
+            tkinter.Label(wcinputs, text='Schedule Every').grid(row=9)
 
-        tk.Label(wcinputs, text='Output Directory').grid(row=lastrow)
+        tkinter.Label(wcinputs, text='Output Directory').grid(row=lastrow)
 
-        self.url = tk.Entry(wcinputs)
+        self.url = tkinter.Entry(wcinputs)
         self.url.grid(row=0, column=1)
 
-        self.username = tk.Entry(wcinputs)
+        self.username = tkinter.Entry(wcinputs)
         self.username.grid(row=1, column=1)
-        self.password = tk.Entry(wcinputs, show='*')
+        self.password = tkinter.Entry(wcinputs, show='*')
         self.password.grid(row=2, column=1)
 
         if fullExport:
-            self.report = tk.Entry(wcinputs)
+            self.report = tkinter.Entry(wcinputs)
             self.report.insert(0, 'WebChart Export')
             self.report.grid(row=3, column=1)
-            self.printdef = tk.Entry(wcinputs)
+            self.printdef = tkinter.Entry(wcinputs)
             self.printdef.insert(0, 'WebChart Export')
             self.printdef.grid(row=4, column=1)
         else:
             now = datetime.now()
-            self.bd_d = tk.Entry(wcinputs, width=2)
+            self.bd_d = tkinter.Entry(wcinputs, width=2)
             self.bd_d.insert(0, now.day)
             self.bd_d.grid(row=3, column=1)
-            self.bd_m = tk.Entry(wcinputs, width=2)
+            self.bd_m = tkinter.Entry(wcinputs, width=2)
             self.bd_m.insert(0, now.month)
             self.bd_m.grid(row=3, column=2)
-            self.bd_y = tk.Entry(wcinputs, width=4)
+            self.bd_y = tkinter.Entry(wcinputs, width=4)
             self.bd_y.insert(0, now.year)
             self.bd_y.grid(row=3, column=3)
-            self.ed_d = tk.Entry(wcinputs, width=2)
+            self.ed_d = tkinter.Entry(wcinputs, width=2)
             self.ed_d.insert(0, now.day)
             self.ed_d.grid(row=4, column=1)
-            self.ed_m = tk.Entry(wcinputs, width=2)
+            self.ed_m = tkinter.Entry(wcinputs, width=2)
             self.ed_m.insert(0, now.month)
             self.ed_m.grid(row=4, column=2)
-            self.ed_y = tk.Entry(wcinputs, width=4)
+            self.ed_y = tkinter.Entry(wcinputs, width=4)
             self.ed_y.insert(0, now.year)
             self.ed_y.grid(row=4, column=3)
 
-            self.cgi = tk.Entry(wcinputs)
+            self.cgi = tkinter.Entry(wcinputs)
             self.cgi.grid(row=5, column=1)
 
-            self.cda = tk.IntVar()
-            self.ccr = tk.IntVar()
-            cda = tk.Checkbutton(wcinputs, text='CDA', variable=self.cda)
-            ccr = tk.Checkbutton(wcinputs, text='CCR', variable=self.ccr)
+            self.cda = tkinter.IntVar()
+            self.ccr = tkinter.IntVar()
+            cda = tkinter.Checkbutton(wcinputs, text='CDA', variable=self.cda)
+            ccr = tkinter.Checkbutton(wcinputs, text='CCR', variable=self.ccr)
             cda.grid(row=6, column=1)
             ccr.grid(row=6, column=2)
 
-            self.schedule = tk.IntVar()
-            tk.Radiobutton(wcinputs, text='No Schedule', variable=self.schedule,
+            self.schedule = tkinter.IntVar()
+            tkinter.Radiobutton(wcinputs, text='No Schedule', variable=self.schedule,
                 value=0).grid(row=7, column=1)
-            tk.Radiobutton(wcinputs, text='Date', variable=self.schedule, value=1).grid(
+            tkinter.Radiobutton(wcinputs, text='Date', variable=self.schedule, value=1).grid(
                 row=8, column=1)
-            self.scheduleOnm = tk.Entry(wcinputs, width=2)
-            self.scheduleOnd = tk.Entry(wcinputs, width=2)
-            self.scheduleOny = tk.Entry(wcinputs, width=4)
-            self.scheduleOnh = tk.Entry(wcinputs, width=2)
-            self.scheduleOnmm = tk.Entry(wcinputs, width=2)
+            self.scheduleOnm = tkinter.Entry(wcinputs, width=2)
+            self.scheduleOnd = tkinter.Entry(wcinputs, width=2)
+            self.scheduleOny = tkinter.Entry(wcinputs, width=4)
+            self.scheduleOnh = tkinter.Entry(wcinputs, width=2)
+            self.scheduleOnmm = tkinter.Entry(wcinputs, width=2)
             self.scheduleOnm.grid(row=8, column=2)
             self.scheduleOnd.grid(row=8, column=3)
             self.scheduleOny.grid(row=8, column=4)
             self.scheduleOnh.grid(row=8, column=5)
             self.scheduleOnmm.grid(row=8, column=6)
-            tk.Radiobutton(wcinputs, text='Every Nth day of the month',
+            tkinter.Radiobutton(wcinputs, text='Every Nth day of the month',
                 variable=self.schedule, value=2).grid(row=9, column=1)
-            self.scheduleEveryd = tk.Entry(wcinputs, width=2)
+            self.scheduleEveryd = tkinter.Entry(wcinputs, width=2)
             self.scheduleEveryd.grid(row=9, column=2)
 
 
-        self.outstring = tk.StringVar()
+        self.outstring = tkinter.StringVar()
         self.outstring.set('wcexport')
-        self.outdirE = tk.Entry(wcinputs, textvariable=self.outstring)
+        self.outdirE = tkinter.Entry(wcinputs, textvariable=self.outstring)
         self.outdirE.grid(row=lastrow, column=1)
-        self.progressFrame = tk.Frame(win)
+        self.progressFrame = tkinter.Frame(win)
         self.progressFrame.pack()
 
-        buttons = tk.Frame(win)
+        buttons = tkinter.Frame(win)
         buttons.pack()
-        self.exportText = tk.StringVar()
+        self.exportText = tkinter.StringVar()
         self.exportText.set('Export')
-        self.exportButton = tk.Button(buttons, textvariable=self.exportText, fg='Green',
+        self.exportButton = tkinter.Button(buttons, textvariable=self.exportText, fg='Green',
             command=self.exportWrapper)
         self.exportButton.grid(row=0, column=0)
-        tk.Button(buttons, text='Exit', command=win.quit).grid(row=0, column=1)
+        tkinter.Button(buttons, text='Exit', command=win.quit).grid(row=0, column=1)
 
-        self.notes = tk.Frame(win)
+        self.notes = tkinter.Frame(win)
         self.notes.pack()
         def genNotes(*args):
             self.outdir = getOutDir(self, self.outstring.get())
@@ -162,7 +163,7 @@ class MainWin(object):
                 '\tAny additional columns with values starting with \'?\' will be '\
                 'treated as a relative url to download a separate file (CCD, CCR, etc..)\n'
             text += '* All downloads will be placed in: [ {0} ]'.format(self.outdir)
-            self.notesText = tk.Label(self.notes, text=text, justify=tk.LEFT).grid(row=0)
+            self.notesText = tkinter.Label(self.notes, text=text, justify=tkinter.LEFT).grid(row=0)
         genNotes(None)
         self.outstring.trace('w', genNotes)
 
@@ -170,18 +171,18 @@ class MainWin(object):
         if data and hasattr(self, 'session_id'):
             data['session_id'] = self.session_id
         try:
-            res = urllib2.urlopen(url, context=getSSLContext(),
-                    data=urllib.urlencode(data, doseq=True) if data else None)
+            res = urlopen(url, context=getSSLContext(),
+                    data=urllib.parse.urlencode(data, doseq=True).encode("utf-8") if data else None)
         except Exception as e:
             raise Warning('Internal error in urlopen [ {0} : {1} ] at [ {2} : {3} ]'.format(
                 type(e), str(e), url, data))
-        if res.getcode() not in [200]:
+        if res.getcode() not in [200,401]:
             raise Warning('Invalid http response code [ {0} ]'.format(res.headers.getcode()))
         if res.headers.get('X-lg_status').lower() != 'success':
             self.log('Login failed for {0}: {1}'.format(url, data))
             raise Exception('Login failed [ {0} ]'.format(res.headers.get('X-status_desc')))
         out = res.read()
-        if [ord(x) for x in out[0:3]] == [239 ,187 ,191]:
+        if out[:3] == [239, 187, 191]:
             # Strip out utf-8 BOM from webchart CSV output
             out = out[3:]
         return out, res
@@ -197,7 +198,7 @@ class MainWin(object):
                 'report': 'System report',
                 'printdef': 'Print definition',
             })
-        for i, v in d.iteritems():
+        for i, v in d.items():
             if not getattr(self, i).get():
                 tkm.showwarning(message='{0} must be given'.format(v))
                 return False
@@ -210,11 +211,11 @@ class MainWin(object):
     
     def validateURL(self):
         try:
-            res = urllib2.urlopen(self.url.get(), context=getSSLContext())
+            res = urlopen(self.url.get(), context=getSSLContext())
         except Exception as e:
             tkm.showwarning(message='Url could not be opened: {0}'.format(e))
             return False
-        if res.getcode() not in [200]:
+        if res.getcode() not in [200,401]:
             tkm.showwarning(message='{0} does not appear to be a valid url'.format(self.url.get()))
             return False
         if 'X-lg_status' not in res.headers:
@@ -284,7 +285,7 @@ class MainWin(object):
         return True
 
     def validate(self):
-        if self.validateInputs() and self.validateURL() and self.validateCredentials()\
+        if self.validateInputs() and self.validateCredentials()\
             and self.validatePrintDef():
             return True
 
@@ -350,7 +351,7 @@ class MainWin(object):
                     if date < now or mm < 0 or mm > 60 or h < 0 or h > 24:
                         raise Exception('no')
                 except Exception as e:
-                    print e
+                    print(e)
                     tkm.showwarning(message='Please enter a valid future date in for the MM/DD/YYYY format')
                     return
             elif self.schedule.get() == 2:
@@ -428,7 +429,7 @@ class MainWin(object):
                 }
                 if self.cgi.get():
                     data.update(urlparse.parse_qs(self.cgi.get()))
-                data['docstg_type'].extend([v for k,v in maps.iteritems() if getattr(self, k).get()])
+                data['docstg_type'].extend([v for k,v in maps.items() if getattr(self, k).get()])
                 try:
                     out, _ = documents = self.getURLResponse(self.url.get(), data)
                 except Exception as e:
@@ -461,7 +462,7 @@ class MainWin(object):
             elif 'You Currently Do Not Have Access to:' in out:
                 self.log('Access denied to chart: {0}'.format(chart_id))
             else:
-                m = re.search('pjob_id=([\d]+)', out)
+                m = re.search('pjob_id=([\\d]+)', out)
                 if m:
                     self.log('Print for chart {0} failed due to document errors, '\
                              'but what printed successfully was saved'.format(chart_id))
@@ -487,7 +488,7 @@ class MainWin(object):
             return filename
 
         def getExternalUrls(baseName, urls):
-            for filename, url in urls.iteritems():
+            for filename, url in urls.items():
                 if url.startswith('?'):
                     out, _ = self.getURLResponse(self.url.get(), urlparse.parse_qs(url[1:]))
                     fname = '{0}_{1}'.format(os.path.splitext(baseName)[0], filename)
@@ -507,12 +508,12 @@ class MainWin(object):
                 with open(filename, 'wb') as fp:
                     fp.write(out)
 
-        self.progress = ttk.Progressbar(self.progressFrame, orient=tk.HORIZONTAL, length=400,
+        self.progress = ttkinter.Progressbar(self.progressFrame, orient=tkinter.HORIZONTAL, length=400,
                                         mode='determinate', maximum=maxprogress)
         self.progress.grid(row=0, column=0)
-        self.progressLabel = tk.Label(self.progressFrame, text='0 / {0}'.format(maxprogress))
+        self.progressLabel = tkinter.Label(self.progressFrame, text='0 / {0}'.format(maxprogress))
         self.progressLabel.grid(row=1, column=0)
-        self.progressCurrent = tk.Label(self.progressFrame, text='Exporting ...')
+        self.progressCurrent = tkinter.Label(self.progressFrame, text='Exporting ...')
         self.progressCurrent.grid(row=2, column=0)
         self.win.update()
 
