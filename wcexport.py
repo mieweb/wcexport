@@ -1,15 +1,16 @@
-#!/usr/bin/env python
-import Tkinter as tk
+#!/usr/bin/env python3
+import tk
+import tkinter
 
 import common
 
 def main():
-    win = tk.Tk()
+    win = tkinter.Tk()
     app = common.MainWin(win)
     win.mainloop()
     try:
         win.destroy()
-    except tk.TclError:
+    except tkinter.TclError:
         pass
 
 if __name__ == '__main__':
