@@ -20,8 +20,19 @@ Running
 --------------
 To run the [executable](docexport.exe) on Windows, simply run the `wcexport.exe` file.
 
-You may also run the [python script](wcexport.py) directly if you cannot run a Windows executable. `./wcexport.py`
+You may also run the [python script](wcexport.py) directly if you cannot run a Windows executable. 
 
+https://www.python.org/downloads/ - install Python. This has been tested in 3.13.2
+
+Download this project using the Code button.
+
+`
+# Install dependancies
+pip3 install -r requirements.txt
+
+# Run the program
+./wcexport.py
+`
 
 Enter the required information into the application's fields and click 'Begin Export'.
 
