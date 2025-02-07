@@ -26,13 +26,13 @@ https://www.python.org/downloads/ - install Python. This has been tested in 3.13
 
 Download this project using the Code button.
 
-`
+```
 # Install dependancies
 pip3 install -r requirements.txt
 
 # Run the program
 ./wcexport.py
-`
+```
 
 Enter the required information into the application's fields and click 'Begin Export'.
 
