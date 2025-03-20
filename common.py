@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 import time
 import math
 from xml.dom import minidom
+from tkinter import ttk
 
 validChars = '_-,.()[] {0}{1}'.format(string.ascii_letters, string.digits)
 def sanitizeFilename(filename):
@@ -248,7 +249,7 @@ class MainWin(object):
             'category_name': 'Appliance Synchronization'
         })
         try:
-            dom = minidom.parse(StringIO(out))
+            dom = minidom.parse(StringIO(out.decode("utf-8")))
         except Exception as e:
             tkm.showerror(message='WebChart permission check did not return a valid XML response')
             return False
@@ -279,7 +280,7 @@ class MainWin(object):
             except Exception as e:
                 tkm.showwarning(message='Invalid url for printdef validation: {0}'.format(e))
                 return False
-            if 'Unable to find Print Definition' in out:
+            if 'Unable to find Print Definition' in out.decode("utf-8", errors="ignore"):
                 tkm.showwarning(message='Invalid print definition: {0}'.format(self.printdef.get()))
                 return False
         return True
@@ -302,8 +303,10 @@ class MainWin(object):
         except Exception as e:
             tkm.showerror(message='Invalid system report response: {0}'.format(e))
             return False
-        reader = csv.DictReader(StringIO(out), delimiter=',')
+        reader = csv.DictReader(StringIO(out.decode("utf-8-sig", errors="ignore")), delimiter=',')
         if 'pat_id' not in reader.fieldnames:
+            print("Raw CSV Data:", out.decode("utf-8", errors="ignore")[:500])  # Print first 500 chars
+            print("Detected Headers:", reader.fieldnames)
             tkm.showerror(message='System report [ {0} ] does not contain the required "pat_id" column'
                 .format(self.report.get()))
             return False
@@ -435,7 +438,7 @@ class MainWin(object):
                 except Exception as e:
                     tkm.showerror(message='Failed to get documents csv list {0}'.format(e))
                     return False
-                reader = csv.DictReader(StringIO(out), delimiter=',')
+                reader = csv.DictReader(StringIO(out.decode("utf-8", errors="ignore")), delimiter=',')
                 documents = []
                 if 'MR Number' not in reader.fieldnames:
                     tkm.showerror(message='CSV data does not contain MR Number, unable to '\
@@ -456,13 +459,13 @@ class MainWin(object):
             d['pat_id'] = chart_id
             url = None
             out, _ = self.getURLResponse(self.url.get(), d)
-            m = re.search('input type="hidden" name="job_url" value="(.*?)"', out)
+            m = re.search('input type="hidden" name="job_url" value="(.*?)"', out.decode("utf-8", errors="ignore"))
             if m:
                 url = m.group(1)
-            elif 'You Currently Do Not Have Access to:' in out:
+            elif 'You Currently Do Not Have Access to:' in out.decode("utf-8", errors="ignore"):
                 self.log('Access denied to chart: {0}'.format(chart_id))
             else:
-                m = re.search('pjob_id=([\\d]+)', out)
+                m = re.search('pjob_id=([\\d]+)', out.decode("utf-8", errors="ignore"))
                 if m:
                     self.log('Print for chart {0} failed due to document errors, '\
                              'but what printed successfully was saved'.format(chart_id))
@@ -476,7 +479,7 @@ class MainWin(object):
         def downloadPrintJob(url, chart_id, filename):
             if url:
                 out, _ = self.getURLResponse(url)
-                if out.strip() == 'Print Spool is currently empty.':
+                if out.decode("utf-8", errors="ignore").strip() == 'Print Spool is currently empty.':
                     out = 'Chart print contained no data to be printed'
                     filename = '{0}.txt'.format(os.path.splitext(filename)[0])
                 with open(filename, 'wb') as fp:
@@ -508,7 +511,7 @@ class MainWin(object):
                 with open(filename, 'wb') as fp:
                     fp.write(out)
 
-        self.progress = ttkinter.Progressbar(self.progressFrame, orient=tkinter.HORIZONTAL, length=400,
+        self.progress = ttk.Progressbar(self.progressFrame, orient=tkinter.HORIZONTAL, length=400,
                                         mode='determinate', maximum=maxprogress)
         self.progress.grid(row=0, column=0)
         self.progressLabel = tkinter.Label(self.progressFrame, text='0 / {0}'.format(maxprogress))
