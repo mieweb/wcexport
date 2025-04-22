@@ -259,13 +259,7 @@ class MainWin(object):
         try:
             out, res = self.getURLResponse(self.url.get(), d)
         except Exception as e:
-            tkm.showwarning(message='Invalid webchart credentials: {0}'.format(e))
-            return False
-        cookie = res.headers.get('Set-Cookie').split('=')
-        try:
-            c = cookie[1].split(';')[0]
-        except:
-            tkm.showerror(message='WebChart cookie could not be parsed: {0}'.format(cookie))
+            tkm.showwarning(message='Invalid credentials or URL: {0}'.format(e))
             return False
         set_cookie_header = res.headers.get('Set-Cookie')
         if set_cookie_header:
@@ -278,7 +272,8 @@ class MainWin(object):
             else:
                 self.session_id = c
         else:
-            self.session_id = c
+            tkm.showerror(message='A Login session was not returned. Were the credentials valid?')
+            return False
         out, res = self.getURLResponse(self.url.get(), {
             'f': 'ajaxget',
             's': 'permission',
