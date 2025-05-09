@@ -599,27 +599,29 @@ class MainWin(object):
                 if self.stop_export:
                     msg = "Export Aborted Due To User Request"
                     break
-                self.queue.put(lambda: update_progress(idx, current, maxprogress))
+
+                # Use default arguments in lambda to capture current values of idx, current, and maxprogress
+                self.queue.put(lambda idx=idx, current=current, maxprogress=maxprogress: update_progress(idx, current, maxprogress))
                 try:
                     if self.fullExport:
                         getChart(current['pat_id'], current['filename'])
-                        self.queue.put(lambda: self.log(str(current['urls'])))
+                        self.queue.put(lambda current=current: self.log(str(current['urls'])))
                         getExternalUrls(current['filename'], current['urls'])
                     else:
                         downloadDocument(current['doc_id'], current['filename'])
                 except Warning as w:
-                    self.queue.put(lambda: self.log(w))
+                    self.queue.put(lambda w=w: self.log(w))
                     if not tkm.askyesno(title='Warning',
-                            message='{0}\n\nDo you want to continue the export?'.format(w)):
+                                        message='{0}\n\nDo you want to continue the export?'.format(w)):
                         msg = 'Export Aborted Due To User Request'
                         break
                 except Exception as e:
-                    self.queue.put(lambda: self.log(e))
-                    self.queue.put(lambda: tkm.showerror(title='Fatal Error', message=e))
+                    self.queue.put(lambda e=e: self.log(e))
+                    self.queue.put(lambda e=e: tkm.showerror(title='Fatal Error', message=e))
                     msg = 'Export Aborted Due to Error'
                     break
 
-            self.queue.put(lambda: self.finalize_export(msg))
+            self.queue.put(lambda msg=msg: self.finalize_export(msg))
 
         # Run the export process in a separate thread
         self.export_thread = threading.Thread(target=handle_export)
