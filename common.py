@@ -19,6 +19,7 @@ import math
 from xml.dom import minidom
 from tkinter import ttk
 import threading
+import queue
 
 validChars = '_-,.()[] {0}{1}'.format(string.ascii_letters, string.digits)
 def sanitizeFilename(filename):
@@ -41,6 +42,9 @@ class MainWin(object):
         self.win = win
         self.fullExport = fullExport
         self.scheduleID = None
+        self.stop_export = False
+        self.export_thread = None  # Reference to the export thread
+        self.queue = queue.Queue()  # Thread-safe queue for communication
         lastrow = 5
         if fullExport:
             win.title('WebChart Export Utility')
@@ -179,7 +183,11 @@ class MainWin(object):
         self.logText = scrolledtext.ScrolledText(self.logFrame, wrap=tkinter.WORD, height=10)
         self.logText.pack(fill=tkinter.BOTH, expand=True)
 
+        self.win.protocol("WM_DELETE_WINDOW", self.on_exit)
         self.log("Application started.")
+
+        # Start processing the queue
+        self.process_queue()
 
     def log(self, message, verbose=False):
         """Log a message to the log text area with a timestamp."""
@@ -374,16 +382,19 @@ class MainWin(object):
         return True 
 
     def cancelSchedule(self):
-        self.win.after_cancel(self.scheduleID)
+        """Stop the export process."""
+        self.stop_export = True
+        if self.export_thread:
+            self.export_thread.join()  # Wait for the thread to finish
+        if self.scheduleID:
+            self.win.after_cancel(self.scheduleID)
         self.exportText.set('Export')
         self.exportButton.configure(command=self.exportWrapper)
 
     def exportWrapper(self):
         self.log("Starting export")
         if self.fullExport or not self.schedule.get():
-            # Run the export process in a separate thread
-            export_thread = threading.Thread(target=self.export)
-            export_thread.start()
+            self.export()
         else:
             if not self.validate():
                 return False
@@ -445,8 +456,8 @@ class MainWin(object):
         if not self.logfp:
             self.logfp = open(os.path.join(self.outdir, 'wcexport.log'), 'a')
             if self.fullExport:
-                self.log('Beginning Export of {0} with report [ {1} ] and print definition [ {2} ]'.format(
-                    self.url.get(), self.report.get(), self.printdef.get()))
+                self.win.after(0, lambda: self.log('Beginning Export of {0} with report [ {1} ] and print definition [ {2} ]'.format(
+                    self.url.get(), self.report.get(), self.printdef.get())))
                 maxprogress = len(self.charts)
                 data = {
                     'f': 'chart',
@@ -458,7 +469,7 @@ class MainWin(object):
                     'print_submit_print': '-- Print --'
                 }
             else:
-                self.log('Beginning document export')
+                self.win.after(0, lambda: self.log('Beginning document export'))
                 maps = {
                     'cda': '19',
                     'ccr': '21',
@@ -516,8 +527,8 @@ class MainWin(object):
             else:
                 m = re.search('pjob_id=([\\d]+)', out.decode("utf-8", errors="ignore"))
                 if m:
-                    self.log('Print for chart {0} failed due to document errors, '\
-                             'but what printed successfully was saved'.format(chart_id))
+                    self.win.after(0, lambda: self.log('Print for chart {0} failed due to document errors, '\
+                             'but what printed successfully was saved'.format(chart_id)))
                     pjob_id = m.group(1)
                     url = '{0}?f=admin&s=printman&v=view_pjob&job_id={1}&session_id={2}'.format(
                         self.url.get(), pjob_id, self.session_id)
@@ -548,7 +559,7 @@ class MainWin(object):
                         with open(fname, 'wb') as fp:
                             fp.write(out)
                     else:
-                        self.log('Skipping already present external url file {0}'.format(fname))
+                        self.win.after(0, lambda: self.log('Skipping already present external url file {0}'.format(fname)))
 
         def downloadDocument(doc_id, filename):
             if not os.path.exists(filename):
@@ -560,6 +571,16 @@ class MainWin(object):
                 with open(filename, 'wb') as fp:
                     fp.write(out)
 
+        def update_progress(idx, current, maxprogress):
+            """Update progress bar and labels on the main thread."""
+            if self.fullExport:
+                self.progressCurrent['text'] = f"Exporting chart [ {current['pat_id']} ]"
+            else:
+                self.progressCurrent['text'] = f"Exporting document [ {current['doc_id']} ]"
+            self.progress.step()
+            self.progressLabel['text'] = f"{idx + 1} / {maxprogress}"
+            self.win.update()
+
         self.progress = ttk.Progressbar(self.progressFrame, orient=tkinter.HORIZONTAL, length=400,
                                         mode='determinate', maximum=maxprogress)
         self.progress.grid(row=0, column=0)
@@ -569,37 +590,58 @@ class MainWin(object):
         self.progressCurrent.grid(row=2, column=0)
         self.win.update()
 
-        msg = 'Export Complete'
-        for idx, current in enumerate(self.charts if self.fullExport else documents):
-            if self.fullExport:
-                self.progressCurrent['text'] = 'Exporting chart [ {0} ]'.format(current['pat_id'])
-            else:
-                self.progressCurrent['text'] = 'Exporting document [ {0} ]'.format(current['doc_id'])
-            self.win.update()
-            try:
-                if self.fullExport:
-                    getChart(current['pat_id'], current['filename'])
-                    self.log(str(current['urls']))
-                    getExternalUrls(current['filename'], current['urls'])
-                else:
-                    downloadDocument(current['doc_id'], current['filename'])
-            except Warning as w:
-                self.log(w)
-                if not tkm.askyesno(title='Warning',
-                        message='{0}\n\nDo you want to continue the export?'.format(w)):
-                    msg = 'Export Aborted Due To User Request'
+        def handle_export():
+            """Perform the export process."""
+            msg = 'Export Complete'
+            for idx, current in enumerate(self.charts if self.fullExport else documents):
+                if self.stop_export:
+                    msg = "Export Aborted Due To User Request"
                     break
-            except Exception as e:
-                self.log(e)
-                tkm.showerror(title='Fatal Error', message=e)
-                msg = 'Export Aborted Due to Error'
-                break
-            self.progress.step()
-            self.progressLabel['text'] = '{0} / {1}'.format(idx + 1, maxprogress)
-            self.win.update()
+                self.queue.put(lambda: update_progress(idx, current, maxprogress))
+                try:
+                    if self.fullExport:
+                        getChart(current['pat_id'], current['filename'])
+                        self.queue.put(lambda: self.log(str(current['urls'])))
+                        getExternalUrls(current['filename'], current['urls'])
+                    else:
+                        downloadDocument(current['doc_id'], current['filename'])
+                except Warning as w:
+                    self.queue.put(lambda: self.log(w))
+                    if not tkm.askyesno(title='Warning',
+                            message='{0}\n\nDo you want to continue the export?'.format(w)):
+                        msg = 'Export Aborted Due To User Request'
+                        break
+                except Exception as e:
+                    self.queue.put(lambda: self.log(e))
+                    self.queue.put(lambda: tkm.showerror(title='Fatal Error', message=e))
+                    msg = 'Export Aborted Due to Error'
+                    break
+
+            self.queue.put(lambda: self.finalize_export(msg))
+
+        # Run the export process in a separate thread
+        self.export_thread = threading.Thread(target=handle_export)
+        self.export_thread.start()
+
+    def finalize_export(self, msg):
+        """Finalize the export process."""
         if not self.schedule.get():
             tkm.showinfo(message=msg)
         self.log(msg)
-        self.logfp.close()
-        self.logfp = None
+        if self.logfp:
+            self.logfp.close()
+            self.logfp = None
 
+    def on_exit(self):
+        """Handle application exit."""
+        self.stop_export = True
+        if self.export_thread:
+            self.export_thread.join()  # Wait for the thread to finish
+        self.win.destroy()  # Close the application window
+
+    def process_queue(self):
+        """Process tasks from the queue."""
+        while not self.queue.empty():
+            task = self.queue.get()
+            task()  # Execute the task
+        self.win.after(100, self.process_queue)  # Schedule the next check
