@@ -18,6 +18,7 @@ import time
 import math
 from xml.dom import minidom
 from tkinter import ttk
+import threading
 
 validChars = '_-,.()[] {0}{1}'.format(string.ascii_letters, string.digits)
 def sanitizeFilename(filename):
@@ -370,7 +371,9 @@ class MainWin(object):
     def exportWrapper(self):
         self.log("Starting export")
         if self.fullExport or not self.schedule.get():
-            self.export()
+            # Run the export process in a separate thread
+            export_thread = threading.Thread(target=self.export)
+            export_thread.start()
         else:
             if not self.validate():
                 return False
