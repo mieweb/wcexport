@@ -200,7 +200,9 @@ class MainWin(object):
         if self.logfp is not None:
             self.logfp.write(f"{formatted_message}\n")
 
-    def getURLResponse(self, url, data={}, retries=3):
+    def getURLResponse(self, url, data=None, retries=3):
+        if data is None:
+            data = {}
         if data and hasattr(self, 'session_id'):
             data['session_id'] = self.session_id
         for attempt in range(retries):
