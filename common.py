@@ -141,6 +141,8 @@ class MainWin(object):
         self.outstring.set('wcexport')
         self.outdirE = tkinter.Entry(wcinputs, textvariable=self.outstring)
         self.outdirE.grid(row=lastrow, column=1, sticky=tkinter.W)
+        self.verbose = tkinter.BooleanVar(value=False)  # Default to not verbose
+        tkinter.Checkbutton(wcinputs, text="Verbose Logging", variable=self.verbose).grid(row=lastrow + 1, column=1, sticky=tkinter.W)
         self.progressFrame = tkinter.Frame(win)
         self.progressFrame.pack()
 
@@ -179,35 +181,45 @@ class MainWin(object):
 
         self.log("Application started.")
 
-    def log(self, message):
+    def log(self, message, verbose=False):
         """Log a message to the log text area."""
+        if verbose and not self.verbose.get():
+            return  # Skip verbose logs if the verbose flag is not enabled
         self.logText.insert(tkinter.END, f"{message}\n")
         self.logText.see(tkinter.END)  # Auto-scroll to the bottom
         if self.logfp is not None:
-            self.logfp.write('{0} {1}\n'.format(time.ctime(), msg))
+            self.logfp.write('{0} {1}\n'.format(time.ctime(), message))
 
     def getURLResponse(self, url, data={}, retries=3):
         if data and hasattr(self, 'session_id'):
             data['session_id'] = self.session_id
         for attempt in range(retries):
+            self.log(f"Attempt {attempt + 1}/{retries}: Sending request to {url}", verbose=True)
             try:
                 res = urlopen(url, context=getSSLContext(),
-                            data=urllib.parse.urlencode(data, doseq=True).encode("utf-8") if data else None)
+                              data=urllib.parse.urlencode(data, doseq=True).encode("utf-8") if data else None)
+                self.log(f"Response code: {res.getcode()}", verbose=True)
             except Exception as e:
-                raise Warning('Internal error in urlopen [ {0} : {1} ] at [ {2} : {3} ]'.format(
-                    type(e), str(e), url, data))
+                self.log(f"Error during request: {e}", verbose=True)
+                raise Warning(f"Internal error in urlopen [ {type(e)} : {str(e)} ] at [ {url} ]")
+
             if res.getcode() not in [200, 401]:
-                raise Warning('Invalid http response code [ {0} ]'.format(res.headers.getcode()))
-            if res.headers.get('X-lg_status').lower() != 'success':
-                self.log('Login failed for {0}: {1}'.format(url, data))
+                self.log(f"Invalid HTTP response code: {res.getcode()}", verbose=True)
+                raise Warning(f"Invalid HTTP response code [ {res.getcode()} ]")
+
+            if res.headers.get('X-lg_status', '').lower() != 'success':
+                self.log(f"Login failed for {url}: {data}")
                 if attempt < retries - 1:
-                    self.log('Retrying login attempt {0}/{1}'.format(attempt, retries))
+                    self.log(f"Retrying login attempt {attempt + 2}/{retries}", verbose=True)
                     if not self.validateCredentials():  # Attempt to re-login
+                        self.log("Re-login failed.", verbose=True)
                         raise Exception('Re-login failed during retry')
                 else:
-                    raise Exception('Login failed after {0} attempts [ {1} ]'.format(retries, res.headers.get('X-status_desc')))
+                    raise Exception(f"Login failed after {retries} attempts: {res.headers.get('X-status_desc')}")
             else:
+                self.log("Request successful.", verbose=True)
                 break  # Exit retry loop if login is successful
+
         out = res.read()
         if out[:3] == [239, 187, 191]:
             # Strip out utf-8 BOM from webchart CSV output
@@ -257,7 +269,7 @@ class MainWin(object):
         }
         self.log("Logging in")
         try:
-            out, res = self.getURLResponse(self.url.get(), d)
+            out, res = self.getURLResponse(self.url.get(), d, 1)
         except Exception as e:
             tkm.showwarning(message='Invalid credentials or URL: {0}'.format(e))
             return False
@@ -272,6 +284,7 @@ class MainWin(object):
             else:
                 self.session_id = c
         else:
+            self.log("Login Failed")
             tkm.showerror(message='A Login session was not returned. Were the credentials valid?')
             return False
         out, res = self.getURLResponse(self.url.get(), {
@@ -279,7 +292,7 @@ class MainWin(object):
             's': 'permission',
             'module': 'WebChart',
             'category_name': 'Appliance Synchronization'
-        })
+        }, 1)
         try:
             dom = minidom.parse(StringIO(out.decode("utf-8")))
         except Exception as e:
