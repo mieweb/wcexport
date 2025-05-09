@@ -2,6 +2,7 @@ import tk
 from tkinter import ttk
 import tkinter
 import tkinter.messagebox as tkm
+from tkinter import scrolledtext
 import urllib
 from urllib.request import urlopen
 from urllib.parse import urlparse
@@ -68,57 +69,57 @@ class MainWin(object):
 
         tkinter.Label(wcinputs, text='Output Directory').grid(row=lastrow)
 
-        self.url = tkinter.Entry(wcinputs)
-        self.url.grid(row=0, column=1)
+        self.url = tkinter.Entry(wcinputs, width=50)
+        self.url.grid(row=0, column=1, sticky=tkinter.W)
 
         self.username = tkinter.Entry(wcinputs)
-        self.username.grid(row=1, column=1)
+        self.username.grid(row=1, column=1, sticky=tkinter.W)
         self.password = tkinter.Entry(wcinputs, show='*')
-        self.password.grid(row=2, column=1)
+        self.password.grid(row=2, column=1, sticky=tkinter.W)
 
         if fullExport:
             self.report = tkinter.Entry(wcinputs)
             self.report.insert(0, 'WebChart Export')
-            self.report.grid(row=3, column=1)
+            self.report.grid(row=3, column=1, sticky=tkinter.W)
             self.printdef = tkinter.Entry(wcinputs)
             self.printdef.insert(0, 'WebChart Export')
-            self.printdef.grid(row=4, column=1)
+            self.printdef.grid(row=4, column=1, sticky=tkinter.W)
         else:
             now = datetime.now()
             self.bd_d = tkinter.Entry(wcinputs, width=2)
             self.bd_d.insert(0, now.day)
-            self.bd_d.grid(row=3, column=1)
+            self.bd_d.grid(row=3, column=1, sticky=tkinter.W)
             self.bd_m = tkinter.Entry(wcinputs, width=2)
             self.bd_m.insert(0, now.month)
-            self.bd_m.grid(row=3, column=2)
+            self.bd_m.grid(row=3, column=2, sticky=tkinter.W)
             self.bd_y = tkinter.Entry(wcinputs, width=4)
             self.bd_y.insert(0, now.year)
-            self.bd_y.grid(row=3, column=3)
+            self.bd_y.grid(row=3, column=3, sticky=tkinter.W)
             self.ed_d = tkinter.Entry(wcinputs, width=2)
             self.ed_d.insert(0, now.day)
-            self.ed_d.grid(row=4, column=1)
+            self.ed_d.grid(row=4, column=1, sticky=tkinter.W)
             self.ed_m = tkinter.Entry(wcinputs, width=2)
             self.ed_m.insert(0, now.month)
-            self.ed_m.grid(row=4, column=2)
+            self.ed_m.grid(row=4, column=2, sticky=tkinter.W)
             self.ed_y = tkinter.Entry(wcinputs, width=4)
             self.ed_y.insert(0, now.year)
-            self.ed_y.grid(row=4, column=3)
+            self.ed_y.grid(row=4, column=3, sticky=tkinter.W)
 
             self.cgi = tkinter.Entry(wcinputs)
-            self.cgi.grid(row=5, column=1)
+            self.cgi.grid(row=5, column=1, sticky=tkinter.W)
 
             self.cda = tkinter.IntVar()
             self.ccr = tkinter.IntVar()
             cda = tkinter.Checkbutton(wcinputs, text='CDA', variable=self.cda)
             ccr = tkinter.Checkbutton(wcinputs, text='CCR', variable=self.ccr)
-            cda.grid(row=6, column=1)
-            ccr.grid(row=6, column=2)
+            cda.grid(row=6, column=1, sticky=tkinter.W)
+            ccr.grid(row=6, column=2, sticky=tkinter.W)
 
             self.schedule = tkinter.IntVar()
             tkinter.Radiobutton(wcinputs, text='No Schedule', variable=self.schedule,
-                value=0).grid(row=7, column=1)
+                value=0).grid(row=7, column=1, sticky=tkinter.W)
             tkinter.Radiobutton(wcinputs, text='Date', variable=self.schedule, value=1).grid(
-                row=8, column=1)
+                row=8, column=1, sticky=tkinter.W)
             self.scheduleOnm = tkinter.Entry(wcinputs, width=2)
             self.scheduleOnd = tkinter.Entry(wcinputs, width=2)
             self.scheduleOny = tkinter.Entry(wcinputs, width=4)
@@ -130,7 +131,7 @@ class MainWin(object):
             self.scheduleOnh.grid(row=8, column=5)
             self.scheduleOnmm.grid(row=8, column=6)
             tkinter.Radiobutton(wcinputs, text='Every Nth day of the month',
-                variable=self.schedule, value=2).grid(row=9, column=1)
+                variable=self.schedule, value=2).grid(row=9, column=1, sticky=tkinter.W)
             self.scheduleEveryd = tkinter.Entry(wcinputs, width=2)
             self.scheduleEveryd.grid(row=9, column=2)
 
@@ -138,7 +139,7 @@ class MainWin(object):
         self.outstring = tkinter.StringVar()
         self.outstring.set('wcexport')
         self.outdirE = tkinter.Entry(wcinputs, textvariable=self.outstring)
-        self.outdirE.grid(row=lastrow, column=1)
+        self.outdirE.grid(row=lastrow, column=1, sticky=tkinter.W)
         self.progressFrame = tkinter.Frame(win)
         self.progressFrame.pack()
 
@@ -168,20 +169,44 @@ class MainWin(object):
         genNotes(None)
         self.outstring.trace('w', genNotes)
 
-    def getURLResponse(self, url, data={}):
+        # Add a log area
+        self.logFrame = tkinter.Frame(win)
+        self.logFrame.pack(fill=tkinter.BOTH, expand=True)
+
+        self.logText = scrolledtext.ScrolledText(self.logFrame, wrap=tkinter.WORD, height=10)
+        self.logText.pack(fill=tkinter.BOTH, expand=True)
+
+        self.log("Application started.")
+
+    def log(self, message):
+        """Log a message to the log text area."""
+        self.logText.insert(tkinter.END, f"{message}\n")
+        self.logText.see(tkinter.END)  # Auto-scroll to the bottom
+        if self.logfp is not None:
+            self.logfp.write('{0} {1}\n'.format(time.ctime(), msg))
+
+    def getURLResponse(self, url, data={}, retries=3):
         if data and hasattr(self, 'session_id'):
             data['session_id'] = self.session_id
-        try:
-            res = urlopen(url, context=getSSLContext(),
-                    data=urllib.parse.urlencode(data, doseq=True).encode("utf-8") if data else None)
-        except Exception as e:
-            raise Warning('Internal error in urlopen [ {0} : {1} ] at [ {2} : {3} ]'.format(
-                type(e), str(e), url, data))
-        if res.getcode() not in [200,401]:
-            raise Warning('Invalid http response code [ {0} ]'.format(res.headers.getcode()))
-        if res.headers.get('X-lg_status').lower() != 'success':
-            self.log('Login failed for {0}: {1}'.format(url, data))
-            raise Exception('Login failed [ {0} ]'.format(res.headers.get('X-status_desc')))
+        for attempt in range(retries):
+            try:
+                res = urlopen(url, context=getSSLContext(),
+                            data=urllib.parse.urlencode(data, doseq=True).encode("utf-8") if data else None)
+            except Exception as e:
+                raise Warning('Internal error in urlopen [ {0} : {1} ] at [ {2} : {3} ]'.format(
+                    type(e), str(e), url, data))
+            if res.getcode() not in [200, 401]:
+                raise Warning('Invalid http response code [ {0} ]'.format(res.headers.getcode()))
+            if res.headers.get('X-lg_status').lower() != 'success':
+                self.log('Login failed for {0}: {1}'.format(url, data))
+                if attempt < retries - 1:
+                    self.log('Retrying login attempt {0}/{1}'.format(attempt, retries))
+                    if not self.validateCredentials():  # Attempt to re-login
+                        raise Exception('Re-login failed during retry')
+                else:
+                    raise Exception('Login failed after {0} attempts [ {1} ]'.format(retries, res.headers.get('X-status_desc')))
+            else:
+                break  # Exit retry loop if login is successful
         out = res.read()
         if out[:3] == [239, 187, 191]:
             # Strip out utf-8 BOM from webchart CSV output
@@ -229,6 +254,7 @@ class MainWin(object):
             'login_user': self.username.get(),
             'login_passwd': self.password.get(),
         }
+        self.log("Logging in")
         try:
             out, res = self.getURLResponse(self.url.get(), d)
         except Exception as e:
@@ -240,6 +266,16 @@ class MainWin(object):
         except:
             tkm.showerror(message='WebChart cookie could not be parsed: {0}'.format(cookie))
             return False
+        set_cookie_header = res.headers.get('Set-Cookie')
+        if set_cookie_header:
+            cookie = set_cookie_header.split('=')
+            try:
+                c = cookie[1].split(';')[0]
+            except IndexError:
+                tkm.showerror(message='Session cookie could not be parsed (index error): {0}'.format(cookie))
+                return False
+            else:
+                self.session_id = c
         else:
             self.session_id = c
         out, res = self.getURLResponse(self.url.get(), {
@@ -264,6 +300,7 @@ class MainWin(object):
         except Exception as e:
             tkm.showerror(message='Your permission to perform this export could not be determined')
             return False
+        self.log("Logged in")
         return True
 
     def validatePrintDef(self):
@@ -298,6 +335,7 @@ class MainWin(object):
             'report_name': self.report.get(),
             'submit_query': '1'
         }
+        self.log("Running system report [ {0} ]".format(self.report.get()))
         try:
             out, res = self.getURLResponse(self.url.get(), data)
         except Exception as e:
@@ -321,11 +359,8 @@ class MainWin(object):
                 'filename': '{0}.pdf'.format(os.path.join(self.outdir, filename)),
                 'urls': dict(zip(extrafields, [row[x] for x in extrafields]))
             })
+        self.log("Retrieved list of {0} charts".format(len(self.charts)))
         return True 
-
-    def log(self, msg):
-        if self.logfp is not None:
-            self.logfp.write('{0} {1}\n'.format(time.ctime(), msg))
 
     def cancelSchedule(self):
         self.win.after_cancel(self.scheduleID)
@@ -333,6 +368,7 @@ class MainWin(object):
         self.exportButton.configure(command=self.exportWrapper)
 
     def exportWrapper(self):
+        self.log("Starting export")
         if self.fullExport or not self.schedule.get():
             self.export()
         else:
