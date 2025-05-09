@@ -182,13 +182,15 @@ class MainWin(object):
         self.log("Application started.")
 
     def log(self, message, verbose=False):
-        """Log a message to the log text area."""
+        """Log a message to the log text area with a timestamp."""
         if verbose and not self.verbose.get():
             return  # Skip verbose logs if the verbose flag is not enabled
-        self.logText.insert(tkinter.END, f"{message}\n")
+        timestamp = time.strftime("[%Y-%m-%d %H:%M:%S]")  # Format: [YYYY-MM-DD HH:MM:SS]
+        formatted_message = f"{timestamp} {message}"
+        self.logText.insert(tkinter.END, f"{formatted_message}\n")
         self.logText.see(tkinter.END)  # Auto-scroll to the bottom
         if self.logfp is not None:
-            self.logfp.write('{0} {1}\n'.format(time.ctime(), message))
+            self.logfp.write(f"{formatted_message}\n")
 
     def getURLResponse(self, url, data={}, retries=3):
         if data and hasattr(self, 'session_id'):
