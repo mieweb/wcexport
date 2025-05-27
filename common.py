@@ -89,6 +89,7 @@ class MainWin(object):
             self.printdef = tkinter.Entry(wcinputs)
             self.printdef.insert(0, 'WebChart Export')
             self.printdef.grid(row=4, column=1, sticky=tkinter.W)
+            self.schedule = tkinter.IntVar(value=0)
         else:
             now = datetime.now()
             self.bd_d = tkinter.Entry(wcinputs, width=2)
@@ -204,7 +205,9 @@ class MainWin(object):
         if data is None:
             data = {}
         if data and hasattr(self, 'session_id'):
-            data['session_id'] = self.session_id
+            # don't add session_id if this is a login attempt
+            if not ('login_user' in data and 'login_passwd' in data):
+                data['session_id'] = self.session_id
         for attempt in range(retries):
             self.log(f"Attempt {attempt + 1}/{retries}: Sending request to {url}", verbose=True)
             try:
@@ -226,6 +229,8 @@ class MainWin(object):
                     if not self.validateCredentials():  # Attempt to re-login
                         self.log("Re-login failed.", verbose=True)
                         raise Exception('Re-login failed during retry')
+                    else:
+                        data['session_id'] = self.session_id  # Update session_id after re-login
                 else:
                     raise Exception(f"Login failed after {retries} attempts: {res.headers.get('X-status_desc')}")
             else:
@@ -290,11 +295,10 @@ class MainWin(object):
             cookie = set_cookie_header.split('=')
             try:
                 c = cookie[1].split(';')[0]
+                self.session_id = c
             except IndexError:
                 tkm.showerror(message='Session cookie could not be parsed (index error): {0}'.format(cookie))
                 return False
-            else:
-                self.session_id = c
         else:
             self.log("Login Failed")
             tkm.showerror(message='A Login session was not returned. Were the credentials valid?')
