@@ -20,6 +20,7 @@ from xml.dom import minidom
 from tkinter import ttk
 import threading
 import queue
+import concurrent.futures
 
 validChars = '_-,.()[] {0}{1}'.format(string.ascii_letters, string.digits)
 def sanitizeFilename(filename):
@@ -461,64 +462,64 @@ class MainWin(object):
             os.makedirs(self.outdir)
         if not self.logfp:
             self.logfp = open(os.path.join(self.outdir, 'wcexport.log'), 'a')
-            if self.fullExport:
-                self.win.after(0, lambda: self.log('Beginning Export of {0} with report [ {1} ] and print definition [ {2} ]'.format(
-                    self.url.get(), self.report.get(), self.printdef.get())))
-                maxprogress = len(self.charts)
-                data = {
-                    'f': 'chart',
-                    's': 'print',
-                    'print_definition': self.printdef.get(),
-                    'print_reason': 'System Export',
-                    'print_printer_name': 'My Computer',
-                    'print_priority': 2,
-                    'print_submit_print': '-- Print --'
-                }
-            else:
-                self.win.after(0, lambda: self.log('Beginning document export'))
-                maps = {
-                    'cda': '19',
-                    'ccr': '21',
-                }
-                data = {
-                    'f': 'chart',
-                    's': 'search',
-                    'search_method': 'doc',
-                    'servicestartdateMONTH': self.bd_m.get(),
-                    'servicestartdateDAY': self.bd_d.get(),
-                    'servicestartdateYEAR': self.bd_y.get(),
-                    'servicestartdateTIME': '00:00',
-                    'serviceenddateMONTH': self.ed_m.get(),
-                    'serviceenddateDAY': self.ed_d.get(),
-                    'serviceenddateYEAR': self.ed_y.get(),
-                    'serviceenddateTIME': '23:59',
-                    'pat_search': 'Search',
-                    'docstg_type': [],
-                    'csv': '1',
-                }
-                if self.cgi.get():
-                    data.update(urlparse.parse_qs(self.cgi.get()))
-                data['docstg_type'].extend([v for k,v in maps.items() if getattr(self, k).get()])
-                try:
-                    out, _ = documents = self.getURLResponse(self.url.get(), data)
-                except Exception as e:
-                    tkm.showerror(message='Failed to get documents csv list {0}'.format(e))
-                    return False
-                reader = csv.DictReader(StringIO(out.decode("utf-8", errors="ignore")), delimiter=',')
-                documents = []
-                if 'MR Number' not in reader.fieldnames:
-                    tkm.showerror(message='CSV data does not contain MR Number, unable to '\
-                        'write unique filenames without this column')
-                    return False
-                for row in reader:
-                    filename = '{MR Number}_{Last}_{First}_{Doc ID}'.format(**row)
-                    documents.append({
-                        'doc_id': row['Doc ID'],
-                        'filename': '{0}'.format(os.path.join(self.outdir,
-                            sanitizeFilename(
-                                '{MR Number}_{Last}_{First}_{Doc ID}'.format(**row))))
-                    })
-                maxprogress = len(documents) 
+        if self.fullExport:
+            self.win.after(0, lambda: self.log('Beginning Export of {0} with report [ {1} ] and print definition [ {2} ]'.format(
+                self.url.get(), self.report.get(), self.printdef.get())))
+            maxprogress = len(self.charts)
+            data = {
+                'f': 'chart',
+                's': 'print',
+                'print_definition': self.printdef.get(),
+                'print_reason': 'System Export',
+                'print_printer_name': 'My Computer',
+                'print_priority': 2,
+                'print_submit_print': '-- Print --'
+            }
+        else:
+            self.win.after(0, lambda: self.log('Beginning document export'))
+            maps = {
+                'cda': '19',
+                'ccr': '21',
+            }
+            data = {
+                'f': 'chart',
+                's': 'search',
+                'search_method': 'doc',
+                'servicestartdateMONTH': self.bd_m.get(),
+                'servicestartdateDAY': self.bd_d.get(),
+                'servicestartdateYEAR': self.bd_y.get(),
+                'servicestartdateTIME': '00:00',
+                'serviceenddateMONTH': self.ed_m.get(),
+                'serviceenddateDAY': self.ed_d.get(),
+                'serviceenddateYEAR': self.ed_y.get(),
+                'serviceenddateTIME': '23:59',
+                'pat_search': 'Search',
+                'docstg_type': [],
+                'csv': '1',
+            }
+            if self.cgi.get():
+                data.update(urlparse.parse_qs(self.cgi.get()))
+            data['docstg_type'].extend([v for k,v in maps.items() if getattr(self, k).get()])
+            try:
+                out, _ = documents = self.getURLResponse(self.url.get(), data)
+            except Exception as e:
+                tkm.showerror(message='Failed to get documents csv list {0}'.format(e))
+                return False
+            reader = csv.DictReader(StringIO(out.decode("utf-8", errors="ignore")), delimiter=',')
+            documents = []
+            if 'MR Number' not in reader.fieldnames:
+                tkm.showerror(message='CSV data does not contain MR Number, unable to '\
+                    'write unique filenames without this column')
+                return False
+            for row in reader:
+                filename = '{MR Number}_{Last}_{First}_{Doc ID}'.format(**row)
+                documents.append({
+                    'doc_id': row['Doc ID'],
+                    'filename': '{0}'.format(os.path.join(self.outdir,
+                        sanitizeFilename(
+                            '{MR Number}_{Last}_{First}_{Doc ID}'.format(**row))))
+                })
+            maxprogress = len(documents) 
 
         def printChart(chart_id):
             d = data.copy()
@@ -546,7 +547,7 @@ class MainWin(object):
             if url:
                 out, _ = self.getURLResponse(url)
                 if out.decode("utf-8", errors="ignore").strip() == 'Print Spool is currently empty.':
-                    out = 'Chart print contained no data to be printed'
+                    out = 'Chart print contained no data to be printed'.encode("utf-8")  # FIX: encode to bytes
                     filename = '{0}.txt'.format(os.path.splitext(filename)[0])
                 with open(filename, 'wb') as fp:
                     fp.write(out)
@@ -587,47 +588,46 @@ class MainWin(object):
             self.progressLabel['text'] = f"{idx + 1} / {maxprogress}"
             self.win.update()
 
-        self.progress = ttk.Progressbar(self.progressFrame, orient=tkinter.HORIZONTAL, length=400,
-                                        mode='determinate', maximum=maxprogress)
-        self.progress.grid(row=0, column=0)
-        self.progressLabel = tkinter.Label(self.progressFrame, text='0 / {0}'.format(maxprogress))
-        self.progressLabel.grid(row=1, column=0)
-        self.progressCurrent = tkinter.Label(self.progressFrame, text='Exporting ...')
-        self.progressCurrent.grid(row=2, column=0)
-        self.win.update()
+        def downloadPrintJob(url, chart_id, filename):
+            if url:
+                out, _ = self.getURLResponse(url)
+                if out.decode("utf-8", errors="ignore").strip() == 'Print Spool is currently empty.':
+                    out = 'Chart print contained no data to be printed'.encode("utf-8")  # FIX: encode to bytes
+                    filename = '{0}.txt'.format(os.path.splitext(filename)[0])
+                with open(filename, 'wb') as fp:
+                    fp.write(out)
+
+        def export_one(idx, current, maxprogress):
+            try:
+                if self.fullExport:
+                    getChart(current['pat_id'], current['filename'])
+                    self.queue.put(lambda current=current: self.log(str(current['urls'])))
+                    getExternalUrls(current['filename'], current['urls'])
+                else:
+                    downloadDocument(current['doc_id'], current['filename'])
+                # Progress update only after work is done
+                self.queue.put(lambda idx=idx, current=current, maxprogress=maxprogress: update_progress(idx, current, maxprogress))
+            except Exception as e:
+                self.queue.put(lambda e=e: self.log(e))
+                self.queue.put(lambda e=e: tkm.showerror(title='Fatal Error', message=e))
+                return False
+            return True
 
         def handle_export():
-            """Perform the export process."""
-            msg = 'Export Complete'
-            for idx, current in enumerate(self.charts if self.fullExport else documents):
-                if self.stop_export:
-                    msg = "Export Aborted Due To User Request"
-                    break
-
-                # Use default arguments in lambda to capture current values of idx, current, and maxprogress
-                self.queue.put(lambda idx=idx, current=current, maxprogress=maxprogress: update_progress(idx, current, maxprogress))
-                try:
-                    if self.fullExport:
-                        getChart(current['pat_id'], current['filename'])
-                        self.queue.put(lambda current=current: self.log(str(current['urls'])))
-                        getExternalUrls(current['filename'], current['urls'])
-                    else:
-                        downloadDocument(current['doc_id'], current['filename'])
-                except Warning as w:
-                    self.queue.put(lambda w=w: self.log(w))
-                    if not tkm.askyesno(title='Warning',
-                                        message='{0}\n\nDo you want to continue the export?'.format(w)):
-                        msg = 'Export Aborted Due To User Request'
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                futures = []
+                items = self.charts if self.fullExport else documents
+                for idx, current in enumerate(items):
+                    if self.stop_export:
+                        msg = "Export Aborted Due To User Request"
                         break
-                except Exception as e:
-                    self.queue.put(lambda e=e: self.log(e))
-                    self.queue.put(lambda e=e: tkm.showerror(title='Fatal Error', message=e))
-                    msg = 'Export Aborted Due to Error'
-                    break
+                    self.log(f"Queueing item {idx + 1}/{len(items)}: {current['pat_id'] if self.fullExport else current['doc_id']} from {current['urls']}")
+                    futures.append(executor.submit(export_one, idx, current, len(items)))
+                concurrent.futures.wait(futures)
 
             self.queue.put(lambda msg=msg: self.finalize_export(msg))
 
-        # Run the export process in a separate thread
+        # Start export in a background thread
         self.export_thread = threading.Thread(target=handle_export)
         self.export_thread.start()
 
