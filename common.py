@@ -21,6 +21,7 @@ from tkinter import ttk
 import threading
 import queue
 import concurrent.futures
+import http.client
 
 validChars = '_-,.()[] {0}{1}'.format(string.ascii_letters, string.digits)
 def sanitizeFilename(filename):
@@ -152,6 +153,13 @@ class MainWin(object):
         self.progressFrame = tkinter.Frame(win)
         self.progressFrame.pack()
 
+        self.progressCurrent = tkinter.Label(self.progressFrame, text="")
+        self.progressCurrent.pack()
+        self.progress = ttk.Progressbar(self.progressFrame, orient="horizontal", mode="determinate")
+        self.progress.pack(fill=tkinter.X, expand=True)
+        self.progressLabel = tkinter.Label(self.progressFrame, text="")
+        self.progressLabel.pack()
+
         buttons = tkinter.Frame(win)
         buttons.pack()
         self.exportText = tkinter.StringVar()
@@ -205,6 +213,7 @@ class MainWin(object):
     def getURLResponse(self, url, data=None, retries=3):
         if data is None:
             data = {}
+        out = b''
         if data and hasattr(self, 'session_id'):
             # don't add session_id if this is a login attempt
             if not ('login_user' in data and 'login_passwd' in data):
@@ -215,6 +224,10 @@ class MainWin(object):
                 res = urlopen(url, context=getSSLContext(),
                               data=urllib.parse.urlencode(data, doseq=True).encode("utf-8") if data else None)
                 self.log(f"Response code: {res.getcode()}", verbose=True)
+                out = res.read()
+            except http.client.IncompleteRead as e:
+                self.log(f"IncompleteRead({len(e.partial) if hasattr(e, 'partial') and e.partial else 0} bytes read)")
+                break  # return what we have so far
             except Exception as e:
                 self.log(f"Error during request: {e}", verbose=True)
                 raise Warning(f"Internal error in urlopen [ {type(e)} : {str(e)} ] at [ {url} ]")
@@ -238,8 +251,7 @@ class MainWin(object):
                 self.log("Request successful.", verbose=True)
                 break  # Exit retry loop if login is successful
 
-        out = res.read()
-        if out[:3] == [239, 187, 191]:
+        if out[:3] == b'\xef\xbb\xbf':
             # Strip out utf-8 BOM from webchart CSV output
             out = out[3:]
         return out, res
@@ -525,7 +537,7 @@ class MainWin(object):
             d = data.copy()
             d['pat_id'] = chart_id
             url = None
-            out, _ = self.getURLResponse(self.url.get(), d)
+            out, res = self.getURLResponse(self.url.get(), d)
             m = re.search('input type="hidden" name="job_url" value="(.*?)"', out.decode("utf-8", errors="ignore"))
             if m:
                 url = m.group(1)
@@ -540,7 +552,19 @@ class MainWin(object):
                     url = '{0}?f=admin&s=printman&v=view_pjob&job_id={1}&session_id={2}'.format(
                         self.url.get(), pjob_id, self.session_id)
                 else:
+                    decoded = out.decode("utf-8", errors="ignore")
                     self.log('Failed to find job_url input or a pjob_id in the response for chart {0}'.format(chart_id))
+                    if "TRAPPED SIGNAL" in decoded:
+                        manual_url = f"{self.url.get()}?f=chart&s=print&print_definition=WebChart%20Export&pat_id={chart_id}"
+                        self.log(f"ERROR: Print job for chart {chart_id} did not complete successfully (TRAPPED SIGNAL). Please manually check: {manual_url}")
+                    else:
+                        x_status = res.headers.get('X-Status')
+                        x_status_desc = res.headers.get('X-status_desc')
+                        if x_status:
+                            self.log(f"status: {x_status}")
+                        if x_status_desc:
+                            self.log(f"status_desc: {x_status_desc}")
+                        self.log(f"Response snippet: {decoded[:500]}", verbose=True)
             return url
 
         def downloadPrintJob(url, chart_id, filename):
@@ -621,7 +645,7 @@ class MainWin(object):
                     if self.stop_export:
                         msg = "Export Aborted Due To User Request"
                         break
-                    self.log(f"Queueing item {idx + 1}/{len(items)}: {current['pat_id'] if self.fullExport else current['doc_id']} from {current['urls']}")
+                    self.log(f"Queueing item {idx + 1}/{len(items)}: {current['pat_id'] if self.fullExport else current['doc_id']} from {current['urls']}", verbose=True)
                     futures.append(executor.submit(export_one, idx, current, len(items)))
                 concurrent.futures.wait(futures)
 
