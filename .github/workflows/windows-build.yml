@@ -14,7 +14,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.13.3'  # or your required version
+        python-version: '3.12'  # Use a stable version
 
     - name: Install dependencies
       run: |
@@ -25,6 +25,13 @@ jobs:
     - name: Build executable
       run: |
         pyinstaller --onefile wcexport.py
+
+    - name: Verify Executable
+      run: |
+        if not exist dist/wcexport.exe (
+          echo "Executable not found!"
+          exit 1
+        )
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
