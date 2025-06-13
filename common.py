@@ -612,20 +612,11 @@ class MainWin(object):
             self.progressLabel['text'] = f"{idx + 1} / {maxprogress}"
             self.win.update()
 
-        def downloadPrintJob(url, chart_id, filename):
-            if url:
-                out, _ = self.getURLResponse(url)
-                if out.decode("utf-8", errors="ignore").strip() == 'Print Spool is currently empty.':
-                    out = 'Chart print contained no data to be printed'.encode("utf-8")  # FIX: encode to bytes
-                    filename = '{0}.txt'.format(os.path.splitext(filename)[0])
-                with open(filename, 'wb') as fp:
-                    fp.write(out)
-
         def export_one(idx, current, maxprogress):
             try:
                 if self.fullExport:
                     getChart(current['pat_id'], current['filename'])
-                    self.queue.put(lambda current=current: self.log(str(current['urls'])))
+                    self.queue.put(lambda current=current: self.log(f'Pat ID {current['pat_id']}, {str(current['urls'])}'))
                     getExternalUrls(current['filename'], current['urls'])
                 else:
                     downloadDocument(current['doc_id'], current['filename'])
