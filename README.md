@@ -18,7 +18,7 @@ The system report should contain two columns:
 
 Running
 --------------
-To run the [executable](docexport.exe) on Windows, simply run the `wcexport.exe` file.
+To run the executable on Windows, simply run the `wcexport.exe` file downloaded from Releases.
 
 You may also run the [python script](wcexport.py) directly if you cannot run a Windows executable. 
 
