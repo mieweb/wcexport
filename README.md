@@ -264,6 +264,7 @@ Enable verbose logging in the GUI applications for detailed troubleshooting:
 - [📖 Architecture Documentation](docs/architecture.md) - System design and data flow
 - [🔧 Component Documentation](docs/components.md) - Detailed component reference
 - [⚡ API Documentation](docs/api.md) - Developer API reference
+- [📝 Usage Examples](docs/usage-examples.md) - Practical examples for all utilities
 - [🤝 Contributing Guidelines](CONTRIBUTING.md) - Development and contribution guide
 
 ## 🛠️ Development
