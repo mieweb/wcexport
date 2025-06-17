@@ -22,20 +22,27 @@ jobs:
         pip3 install pyinstaller
         pip3 install -r requirements.txt
 
-    - name: Build executable
+    - name: Build executables
       run: |
         pyinstaller --onefile wcexport.py
+        pyinstaller --onefile docexport.py
 
-    - name: Verify Executable
+    - name: Verify Executables
       run: |
         if (-Not (Test-Path "dist/wcexport.exe")) {
-          Write-Host "Executable not found!"
+          Write-Host "wcexport.exe not found!"
+          exit 1
+        }
+        if (-Not (Test-Path "dist/docexport.exe")) {
+          Write-Host "docexport.exe not found!"
           exit 1
         }
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
-        files: dist/wcexport.exe
+        files: |
+          dist/wcexport.exe
+          dist/docexport.exe
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
