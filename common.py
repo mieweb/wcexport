@@ -190,7 +190,7 @@ class MainWin(object):
         self.logFrame = tkinter.Frame(win)
         self.logFrame.pack(fill=tkinter.BOTH, expand=True)
 
-        self.logText = scrolledtext.ScrolledText(self.logFrame, wrap=tkinter.WORD, height=10)
+        self.logText = scrolledtext.ScrolledText(self.logFrame, wrap=tkinter.WORD, height=15)
         self.logText.pack(fill=tkinter.BOTH, expand=True)
 
         self.win.protocol("WM_DELETE_WINDOW", self.on_exit)
@@ -629,6 +629,7 @@ class MainWin(object):
             return True
 
         def handle_export():
+            msg = "Export Completed"
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
                 futures = []
                 items = self.charts if self.fullExport else documents
@@ -639,6 +640,9 @@ class MainWin(object):
                     self.log(f"Queueing item {idx + 1}/{len(items)}: {current['pat_id'] if self.fullExport else current['doc_id']} from {current['urls']}", verbose=True)
                     futures.append(executor.submit(export_one, idx, current, len(items)))
                 concurrent.futures.wait(futures)
+
+            # Verify all exports
+            self.queue.put(lambda msg="Verifying exports...": self.verify_exports())
 
             self.queue.put(lambda msg=msg: self.finalize_export(msg))
 
@@ -668,3 +672,58 @@ class MainWin(object):
             task = self.queue.get()
             task()  # Execute the task
         self.win.after(100, self.process_queue)  # Schedule the next check
+
+    def verify_exports(self):
+        """Verify exported files and report statistics."""
+        pdf_count = 0
+        missing_count = 0
+        empty_count = 0
+        text_count = 0
+        no_data_count = 0
+
+        items = self.charts if self.fullExport else documents
+
+        for current in items:
+            filename = current['filename']
+
+            # Check if PDF exists and has content
+            pdf_file = filename
+            txt_file = f"{os.path.splitext(filename)[0]}.txt"
+
+            if os.path.exists(pdf_file) and os.path.getsize(pdf_file) > 0:
+                pdf_count += 1
+            elif os.path.exists(txt_file):
+                text_count += 1
+                # Check if it's the "no data" message
+                try:
+                    with open(txt_file, 'r', encoding='utf-8') as f:
+                        content = f.read().strip()
+                        if content == "Chart print contained no data to be printed":
+                            no_data_count += 1
+                except Exception as e:
+                    self.log(f"Error reading {txt_file}: {e}")
+            elif os.path.exists(pdf_file) and os.path.getsize(pdf_file) == 0:
+                empty_count += 1
+            else:
+                missing_count += 1
+                self.log(f"Missing file: {filename}")
+
+        # Log summary
+        total_items = len(items)
+        self.log(f"Export Verification Summary:")
+        self.log(f"  Total items: {total_items}")
+        self.log(f"  Successful PDFs: {pdf_count}")
+        self.log(f"  Empty PDFs (error): {empty_count}")
+        self.log(f"  Charts with no documents to print: {no_data_count}")
+        self.log(f"  Other text files (error): {text_count - no_data_count}")
+        self.log(f"  Missing files: {missing_count}")
+        self.log(f"If any charts failed to print, please click Print Chart and choose the {{self.printdef.get()}} print definition to see why it failed. If it prints, you can save that PDF to the export directory.")
+
+        return {
+            'total': total_items,
+            'pdf_success': pdf_count,
+            'pdf_empty': empty_count,
+            'txt_no_data': no_data_count,
+            'txt_other': text_count - no_data_count,
+            'missing': missing_count
+        }
