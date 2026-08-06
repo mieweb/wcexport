@@ -10,10 +10,14 @@ def main():
     parser = argparse.ArgumentParser(description="WebChart Export Utility")
     parser.add_argument("url", nargs="?", help="WebChart URL (optional)")
     parser.add_argument("username", nargs="?", help="WebChart username (optional)")
+    parser.add_argument("--debug", action="store_true",
+                        help="Log full request/response detail (credentials masked) to the debug log")
+    parser.add_argument("--log-file", dest="log_file",
+                        help="Path to the debug log file (default: <output directory>/wcexport-debug.log)")
     args = parser.parse_args()
 
     win = tkinter.Tk()
-    app = common.MainWin(win)
+    app = common.MainWin(win, debug=args.debug, logFile=args.log_file)
 
     # Set URL and username if provided
     if args.url:

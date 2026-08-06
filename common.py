@@ -22,10 +22,81 @@ import threading
 import queue
 import concurrent.futures
 import http.client
+import logging
+import logging.handlers
 
 validChars = '_-,.()[] {0}{1}'.format(string.ascii_letters, string.digits)
 def sanitizeFilename(filename):
     return ''.join([x if x in validChars else '_' for x in filename])
+
+DEBUG_LOG_NAME = 'wcexport-debug.log'
+DEBUG_LOG_MAX_BYTES = 5 * 1024 * 1024
+DEBUG_LOG_BACKUP_COUNT = 3
+DEBUG_BODY_PREVIEW_LIMIT = 4000
+SENSITIVE_PARAMS = ('login_passwd', 'password', 'passwd', 'pass')
+
+def maskValue(value):
+    """Return a non-reversible placeholder that still reveals whether a value was sent."""
+    if value is None:
+        return '<none>'
+    text = str(value)
+    if not text:
+        return '<empty>'
+    return '<redacted len={0}>'.format(len(text))
+
+def maskParams(data):
+    """Copy a request parameter dict with credentials replaced by placeholders."""
+    if not data:
+        return {}
+    masked = {}
+    for key, value in data.items():
+        if key in SENSITIVE_PARAMS:
+            masked[key] = maskValue(value)
+        elif key == 'session_id':
+            text = str(value)
+            masked[key] = '{0}...(len={1})'.format(text[:4], len(text)) if text else '<empty>'
+        else:
+            masked[key] = value
+    return masked
+
+def detectInterstitial(body):
+    """Identify a WebChart HTML interstitial served in place of the requested content.
+
+    WebChart still returns 'X-lg_status: success' when a session is authenticated but blocked
+    behind an enrollment step, so the only way to spot it is by inspecting the body.
+    Returns a human-readable explanation, or None if the body is not a known interstitial.
+    """
+    text = body.decode('utf-8', errors='replace') if isinstance(body, bytes) else str(body)
+    head = text[:8000]
+    if '<title>Setup 2FA' in head or 'id="2fa_win"' in head or '2fa_barcode' in head:
+        return ('This WebChart user must finish two-factor authentication (2FA) enrollment. '
+                'WebChart is returning the "Setup 2FA" page instead of data for every request, '
+                'so the export cannot run. Log into WebChart in a browser as this user, complete '
+                '2FA setup, then retry - or have an administrator exempt this account from 2FA.')
+    if '<title>' in head and 'login' in head.lower() and 'password' in head.lower():
+        return ('WebChart returned a login page instead of data. The session was not accepted '
+                'for this request.')
+    return None
+
+
+def setupDebugLogger(logPath, debug):
+    """Configure the shared file logger. Returns the logger, or None if a file could not be opened."""
+    logger = logging.getLogger('wcexport')
+    logger.setLevel(logging.DEBUG if debug else logging.INFO)
+    logger.propagate = False
+    for handler in list(logger.handlers):
+        logger.removeHandler(handler)
+        handler.close()
+    try:
+        os.makedirs(os.path.dirname(os.path.abspath(logPath)), exist_ok=True)
+        handler = logging.handlers.RotatingFileHandler(
+            logPath, maxBytes=DEBUG_LOG_MAX_BYTES, backupCount=DEBUG_LOG_BACKUP_COUNT, encoding='utf-8')
+    except OSError:
+        return None
+    handler.setFormatter(logging.Formatter('[%(asctime)s] %(levelname)s %(message)s',
+                                           datefmt='%Y-%m-%d %H:%M:%S'))
+    logger.addHandler(handler)
+    return logger
 
 def getSSLContext():
     ctx = ssl.create_default_context()
@@ -40,7 +111,7 @@ def getOutDir(cls, path):
         return os.path.join(os.path.expanduser('~'), path)
 
 class MainWin(object):
-    def __init__(self, win, fullExport=True):
+    def __init__(self, win, fullExport=True, debug=False, logFile=None):
         self.win = win
         self.fullExport = fullExport
         self.scheduleID = None
@@ -148,8 +219,11 @@ class MainWin(object):
         self.outstring.set('wcexport')
         self.outdirE = tkinter.Entry(wcinputs, textvariable=self.outstring)
         self.outdirE.grid(row=lastrow, column=1, sticky=tkinter.W)
-        self.verbose = tkinter.BooleanVar(value=False)  # Default to not verbose
+        self.verbose = tkinter.BooleanVar(value=debug)  # Debug implies verbose GUI logging
         tkinter.Checkbutton(wcinputs, text="Verbose Logging", variable=self.verbose).grid(row=lastrow + 1, column=1, sticky=tkinter.W)
+        self.debug = tkinter.BooleanVar(value=debug)
+        tkinter.Checkbutton(wcinputs, text="Debug (log full requests/responses to file)",
+            variable=self.debug, command=self.applyDebugLevel).grid(row=lastrow + 2, column=1, sticky=tkinter.W)
         self.progressFrame = tkinter.Frame(win)
         self.progressFrame.pack()
 
@@ -184,7 +258,8 @@ class MainWin(object):
             text += '* All downloads will be placed in: [ {0} ]'.format(self.outdir)
             self.notesText = tkinter.Label(self.notes, text=text, justify=tkinter.LEFT).grid(row=0)
         genNotes(None)
-        self.outstring.trace('w', genNotes)
+        # trace_add replaces the legacy trace('w', ...) call, which Tcl/Tk 9 no longer supports.
+        self.outstring.trace_add('write', genNotes)
 
         # Add a log area
         self.logFrame = tkinter.Frame(win)
@@ -193,14 +268,34 @@ class MainWin(object):
         self.logText = scrolledtext.ScrolledText(self.logFrame, wrap=tkinter.WORD, height=15)
         self.logText.pack(fill=tkinter.BOTH, expand=True)
 
+        # The debug log is opened at startup rather than at export time so that login and
+        # permission-check failures - which happen before export() runs - are captured on disk.
+        self.debugLogPath = logFile or os.path.join(self.outdir, DEBUG_LOG_NAME)
+        self.logger = setupDebugLogger(self.debugLogPath, self.debug.get())
+
         self.win.protocol("WM_DELETE_WINDOW", self.on_exit)
         self.log("Application started.")
+        if self.logger:
+            self.log("Debug log: {0}".format(self.debugLogPath))
+        else:
+            self.log("Debug log could not be opened at [ {0} ]".format(self.debugLogPath))
 
         # Start processing the queue
         self.process_queue()
 
+    def applyDebugLevel(self):
+        """Sync the logger level with the Debug checkbox."""
+        if self.debug.get():
+            self.verbose.set(True)
+        if self.logger:
+            self.logger.setLevel(logging.DEBUG if self.debug.get() else logging.INFO)
+        self.log("Debug logging {0}".format('enabled' if self.debug.get() else 'disabled'))
+
     def log(self, message, verbose=False):
         """Log a message to the log text area with a timestamp."""
+        # Everything reaches the debug log; the verbose flag only gates the GUI pane.
+        if self.logger:
+            self.logger.log(logging.DEBUG if verbose else logging.INFO, message)
         if verbose and not self.verbose.get():
             return  # Skip verbose logs if the verbose flag is not enabled
         timestamp = time.strftime("[%Y-%m-%d %H:%M:%S]")  # Format: [YYYY-MM-DD HH:MM:SS]
@@ -210,7 +305,32 @@ class MainWin(object):
         if self.logfp is not None:
             self.logfp.write(f"{formatted_message}\n")
 
-    def getURLResponse(self, url, data=None, retries=3):
+    def debugLog(self, message):
+        """Write detail that is only useful for diagnostics to the debug log file."""
+        if self.logger and self.debug.get():
+            self.logger.debug(message)
+
+    def debugDump(self, label, url, params=None, response=None, body=None):
+        """Record a full request/response exchange in the debug log."""
+        if not (self.logger and self.debug.get()):
+            return
+        lines = ['--- {0} ---'.format(label), 'URL: {0}'.format(url)]
+        if params is not None:
+            lines.append('Params: {0}'.format(maskParams(params)))
+        if response is not None:
+            lines.append('Status: {0}'.format(response.getcode()))
+            lines.append('Response headers:')
+            for name, value in response.headers.items():
+                lines.append('  {0}: {1}'.format(name, value))
+        if body is not None:
+            text = body.decode('utf-8', errors='replace') if isinstance(body, bytes) else str(body)
+            lines.append('Body length: {0}'.format(len(body)))
+            lines.append('Body[:{0}]:'.format(DEBUG_BODY_PREVIEW_LIMIT))
+            lines.append(text[:DEBUG_BODY_PREVIEW_LIMIT])
+        lines.append('--- end {0} ---'.format(label))
+        self.logger.debug('\n'.join(lines))
+
+    def getURLResponse(self, url, data=None, retries=3, label=None):
         if data is None:
             data = {}
         out = b''
@@ -218,18 +338,23 @@ class MainWin(object):
             # don't add session_id if this is a login attempt
             if not ('login_user' in data and 'login_passwd' in data):
                 data['session_id'] = self.session_id
+        label = label or 'request'
         for attempt in range(retries):
             self.log(f"Attempt {attempt + 1}/{retries}: Sending request to {url}", verbose=True)
+            self.debugLog(f"{label}: POST params {maskParams(data)}" if data
+                          else f"{label}: GET {url}")
             try:
                 res = urlopen(url, context=getSSLContext(),
                               data=urllib.parse.urlencode(data, doseq=True).encode("utf-8") if data else None)
                 self.log(f"Response code: {res.getcode()}", verbose=True)
                 out = res.read()
+                self.debugDump(f"{label} attempt {attempt + 1}", url, data, res, out)
             except http.client.IncompleteRead as e:
                 self.log(f"IncompleteRead({len(e.partial) if hasattr(e, 'partial') and e.partial else 0} bytes read)")
                 break  # return what we have so far
             except Exception as e:
                 self.log(f"Error during request: {e}", verbose=True)
+                self.debugLog(f"{label}: urlopen raised {type(e).__name__}: {e}")
                 raise Warning(f"Internal error in urlopen [ {type(e)} : {str(e)} ] at [ {url} ]")
 
             if res.getcode() not in [200, 401]:
@@ -237,7 +362,9 @@ class MainWin(object):
                 raise Warning(f"Invalid HTTP response code [ {res.getcode()} ]")
 
             if res.headers.get('X-lg_status', '').lower() != 'success':
-                self.log(f"Login failed for {url}: {data}")
+                self.log(f"Login failed for {url}: {maskParams(data)}")
+                self.log(f"X-lg_status: [ {res.headers.get('X-lg_status')} ] "
+                         f"X-status_desc: [ {res.headers.get('X-status_desc')} ]")
                 if attempt < retries - 1:
                     self.log(f"Retrying login attempt {attempt + 2}/{retries}", verbose=True)
                     if not self.validateCredentials():  # Attempt to re-login
@@ -299,16 +426,19 @@ class MainWin(object):
         }
         self.log("Logging in")
         try:
-            out, res = self.getURLResponse(self.url.get(), d, 1)
+            out, res = self.getURLResponse(self.url.get(), d, 1, label='login')
         except Exception as e:
+            self.log('Login request failed: {0}: {1}'.format(type(e).__name__, e))
             tkm.showwarning(message='Invalid credentials or URL: {0}'.format(e))
             return False
         set_cookie_header = res.headers.get('Set-Cookie')
+        self.debugLog('Raw Set-Cookie header: {0!r}'.format(set_cookie_header))
         if set_cookie_header:
             cookie = set_cookie_header.split('=')
             try:
                 c = cookie[1].split(';')[0]
                 self.session_id = c
+                self.debugLog('Parsed session_id: {0}...(len={1})'.format(c[:4], len(c)))
             except IndexError:
                 tkm.showerror(message='Session cookie could not be parsed (index error): {0}'.format(cookie))
                 return False
@@ -316,19 +446,46 @@ class MainWin(object):
             self.log("Login Failed")
             tkm.showerror(message='A Login session was not returned. Were the credentials valid?')
             return False
-        out, res = self.getURLResponse(self.url.get(), {
+        permissionParams = {
             'f': 'ajaxget',
             's': 'permission',
             'module': 'WebChart',
             'category_name': 'Appliance Synchronization'
-        }, 1)
+        }
         try:
-            dom = minidom.parse(StringIO(out.decode("utf-8")))
+            out, res = self.getURLResponse(self.url.get(), permissionParams, 1, label='permission-check')
         except Exception as e:
-            tkm.showerror(message='WebChart permission check did not return a valid XML response')
+            self.log('Permission check request failed: {0}: {1}'.format(type(e).__name__, e))
+            tkm.showerror(message='WebChart permission check request failed: {0}'.format(e))
+            return False
+        body = out.decode("utf-8", errors="replace")
+        interstitial = detectInterstitial(out)
+        if interstitial:
+            self.log('Permission check was intercepted by a WebChart interstitial page.')
+            self.log(interstitial)
+            self.savePermissionResponse(out)
+            tkm.showerror(message=interstitial)
+            return False
+        try:
+            dom = minidom.parse(StringIO(body))
+        except Exception as e:
+            self.log('Permission check XML parse failed: {0}: {1}'.format(type(e).__name__, e))
+            self.log('Permission check content-type: [ {0} ], body length: {1}'.format(
+                res.headers.get('Content-Type'), len(out)))
+            self.log('Permission check body (first {0} chars): {1}'.format(
+                DEBUG_BODY_PREVIEW_LIMIT, body[:DEBUG_BODY_PREVIEW_LIMIT]))
+            rawPath = self.savePermissionResponse(out)
+            tkm.showerror(message='WebChart permission check did not return a valid XML response.\n\n'
+                '{0}: {1}\n\nSee the log{2} for the full response.'.format(
+                    type(e).__name__, e, ' and [ {0} ]'.format(rawPath) if rawPath else ''))
             return False
         permissions = dom.getElementsByTagName('permission')
         if not permissions:
+            self.log('Permission check returned no <permission> nodes. Root element: [ {0} ]'.format(
+                dom.documentElement.tagName if dom.documentElement is not None else None))
+            self.log('Permission check body (first {0} chars): {1}'.format(
+                DEBUG_BODY_PREVIEW_LIMIT, body[:DEBUG_BODY_PREVIEW_LIMIT]))
+            self.savePermissionResponse(out)
             tkm.showerror(message='WebChart permission check did not return any permission nodes')
             return False
         try:
@@ -336,10 +493,27 @@ class MainWin(object):
                 tkm.showerror(message='You do not have the required "Appliance Synchronization" permission to perform this export')
                 return False
         except Exception as e:
+            self.log('Permission value could not be read: {0}: {1}'.format(type(e).__name__, e))
+            self.log('Permission node XML: {0}'.format(permissions[0].toxml()))
             tkm.showerror(message='Your permission to perform this export could not be determined')
             return False
         self.log("Logged in")
         return True
+
+    def savePermissionResponse(self, body):
+        """Persist the raw permission-check body next to the debug log. Returns the path, or None."""
+        if not self.debug.get():
+            return None
+        path = os.path.join(os.path.dirname(os.path.abspath(self.debugLogPath)), 'permission-response.raw')
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'wb') as fp:
+                fp.write(body)
+        except OSError as e:
+            self.log('Could not write raw permission response to [ {0} ]: {1}'.format(path, e))
+            return None
+        self.log('Raw permission response written to [ {0} ]'.format(path))
+        return path
 
     def validatePrintDef(self):
         if self.fullExport:
