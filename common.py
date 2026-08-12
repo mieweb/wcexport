@@ -318,10 +318,8 @@ class MainWin(object):
         if params is not None:
             lines.append('Params: {0}'.format(maskParams(params)))
         if response is not None:
-            lines.append('Status: {0}'.format(response.getcode()))
-            lines.append('Response headers:')
             for name, value in response.headers.items():
-                lines.append('  {0}: {1}'.format(name, value))
+                lines.append('  {0}: {1}'.format(name, maskValue(value) if name.lower() == 'set-cookie' else value))
         if body is not None:
             text = body.decode('utf-8', errors='replace') if isinstance(body, bytes) else str(body)
             lines.append('Body length: {0}'.format(len(body)))
@@ -476,8 +474,9 @@ class MainWin(object):
                 DEBUG_BODY_PREVIEW_LIMIT, body[:DEBUG_BODY_PREVIEW_LIMIT]))
             rawPath = self.savePermissionResponse(out)
             tkm.showerror(message='WebChart permission check did not return a valid XML response.\n\n'
-                '{0}: {1}\n\nSee the log{2} for the full response.'.format(
-                    type(e).__name__, e, ' and [ {0} ]'.format(rawPath) if rawPath else ''))
+                '{0}: {1}\n\nSee the debug log for details{2}.'.format(
+                    type(e).__name__, e,
+                    ' and the raw response at [ {0} ]'.format(rawPath) if rawPath else ' (enable Debug to save the raw response body)'))
             return False
         permissions = dom.getElementsByTagName('permission')
         if not permissions:
