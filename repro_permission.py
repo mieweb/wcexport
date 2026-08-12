@@ -84,7 +84,10 @@ def request(url, params, label):
     print('Final URL: {0}'.format(res.geturl()))
     print('Response headers:')
     for name, value in res.headers.items():
-        print('  {0}: {1}'.format(name, value))
+        if name.lower() == 'set-cookie':
+            print('  {0}: <redacted len={1}>'.format(name, len(value)))
+        else:
+            print('  {0}: {1}'.format(name, value))
     print('Body length: {0} bytes'.format(len(body)))
     print('Body (first {0} chars):'.format(BODY_PREVIEW_LIMIT))
     print(body.decode('utf-8', errors='replace')[:BODY_PREVIEW_LIMIT])
